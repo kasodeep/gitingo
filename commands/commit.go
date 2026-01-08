@@ -188,14 +188,14 @@ func ReadCommitTreeHash(repoRoot, commitHash string) string {
 	}
 
 	// Skip header: "commit <size>\0"
-	nullIdx := bytes.IndexByte(data, 0)
-	content := data[nullIdx+1:]
+	_, after, _ := bytes.Cut(data, []byte{0})
+	content := after
 
 	scanner := bufio.NewScanner(bytes.NewReader(content))
 	for scanner.Scan() {
 		line := scanner.Text()
-		if strings.HasPrefix(line, "tree ") {
-			return strings.TrimSpace(strings.TrimPrefix(line, "tree "))
+		if after0, ok := strings.CutPrefix(line, "tree "); ok {
+			return strings.TrimSpace(after0)
 		}
 	}
 
