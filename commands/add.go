@@ -2,11 +2,11 @@ package commands
 
 import (
 	"bufio"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 
 	"github.com/kasodeep/gitingo/internal/printer"
 )
@@ -14,75 +14,77 @@ import (
 var p = printer.NewPrettyPrinter()
 
 const (
-	index_file = "index"
+	indexFile = "index"
 )
 
-type Index struct {
-	files map[string]string
+/*
+IndexEntry represents one staged file
+*/
+type IndexEntry struct {
+	Mode string // 100644, 100755, 120000
+	Hash string // hex hash
+	Path string // relative path
 }
 
 /*
-The method allow to parse the index, adds the files for tracking, stages the files already being tracked.
-Equivalent to: git add / git add . / git add <path>
+Index is the staging area
+*/
+type Index struct {
+	Entries map[string]IndexEntry // path -> entry
+}
+
+/*
+git add / git add . / git add <path>
 */
 func Add(repoRoot string, files []string, isAll bool) {
 	gitPath := filepath.Join(repoRoot, git_folder)
 	if !IsAlreadyInit(gitPath) {
 		p.Error("no repo initialized, please run gitingo init...")
+		return
 	}
 
-	index := Parse(gitPath)
+	index := ParseIndex(gitPath)
 
 	if isAll {
-		index.AddAll(repoRoot)
+		index.addFromPath(repoRoot, repoRoot)
 	} else {
-		index.AddFiles(repoRoot, files)
+		index.addFiles(repoRoot, files)
 	}
 
-	index.Write(gitPath)
+	if err := index.Write(gitPath); err != nil {
+		p.Error(err.Error())
+	}
 }
 
 /*
-The method iterates over the args and calls the appropiate add from path or add file function.
-It checks if the file exists or not.
-Usage: git add <file> <dir>
+Add specific files or directories
 */
-func (index *Index) AddFiles(repoRoot string, files []string) {
+func (idx *Index) addFiles(repoRoot string, files []string) {
 	for _, file := range files {
-		startPath := filepath.Join(repoRoot, file)
-
-		info, err := os.Stat(startPath)
+		full := filepath.Join(repoRoot, file)
+		info, err := os.Lstat(full)
 		if err != nil {
 			continue
 		}
 
 		if info.IsDir() {
-			index.addFromPath(repoRoot, startPath)
-			continue
+			idx.addFromPath(repoRoot, full)
+		} else {
+			idx.addFile(repoRoot, full)
 		}
-
-		index.addFile(repoRoot, startPath)
 	}
 }
 
 /*
-Calls the addFromPath by specifying to iterate over the entire directory.
-Usage: git add .
+Recursively add files from a directory
 */
-func (index *Index) AddAll(repoRoot string) {
-	index.addFromPath(repoRoot, repoRoot)
-}
-
-/*
- */
-func (index *Index) addFromPath(repoRoot, startPath string) {
-	filepath.WalkDir(startPath, func(curr string, d os.DirEntry, err error) error {
+func (idx *Index) addFromPath(repoRoot, start string) {
+	filepath.WalkDir(start, func(curr string, d os.DirEntry, err error) error {
 		if err != nil {
 			return nil
 		}
 
-		// Skip .git completely
-		if d.IsDir() && d.Name() == git_folder {
+		if d.IsDir() && (d.Name() == git_folder || d.Name() == ".git") {
 			return filepath.SkipDir
 		}
 
@@ -90,108 +92,128 @@ func (index *Index) addFromPath(repoRoot, startPath string) {
 			return nil
 		}
 
-		index.addFile(repoRoot, curr)
+		idx.addFile(repoRoot, curr)
 		return nil
 	})
 }
 
 /*
-The method hashes the content of the files, and compares with the old hash.
-It updates the *Index and writes the new blob in case of changes made to the file.
+Add a single file to index
 */
-func (index *Index) addFile(repoRoot, fullPath string) {
-	content, err := os.ReadFile(fullPath)
+func (idx *Index) addFile(repoRoot, fullPath string) {
+	info, err := os.Lstat(fullPath)
 	if err != nil {
-		p.Error(err.Error())
+		return
 	}
 
-	hash := FileHash(content)
+	mode := gitMode(info)
+
+	var content []byte
+	if mode == "120000" {
+		target, err := os.Readlink(fullPath)
+		if err != nil {
+			return
+		}
+		content = []byte(target)
+	} else {
+		content, err = os.ReadFile(fullPath)
+		if err != nil {
+			return
+		}
+	}
+
+	hash := WriteBlob(repoRoot, content)
 
 	relPath, err := filepath.Rel(repoRoot, fullPath)
 	if err != nil {
 		return
 	}
 
-	oldHash, exists := index.files[relPath]
-	if exists && oldHash == hash {
+	relPath = filepath.ToSlash(relPath)
+
+	old, exists := idx.Entries[relPath]
+	if exists && old.Hash == hash && old.Mode == mode {
 		return
 	}
 
-	WriteBlob(repoRoot, hash, content)
-	index.files[relPath] = hash
-}
-
-/*
-When indexing a file, we store the blob of it, in the objects folder.
-It follows the proper git convention with hash[:2]/hash[2:]
-*/
-func WriteBlob(repoRoot, hash string, content []byte) {
-	objDir := filepath.Join(repoRoot, git_folder, "objects", hash[:2])
-	objPath := filepath.Join(objDir, hash[2:])
-
-	// Deduplication
-	if _, err := os.Stat(objPath); err == nil {
-		return
-	}
-
-	if err := os.MkdirAll(objDir, 0755); err != nil {
-		p.Error(err.Error())
-	}
-
-	err := os.WriteFile(objPath, content, 0644)
-	if err != nil {
-		p.Error(err.Error())
+	idx.Entries[relPath] = IndexEntry{
+		Mode: mode,
+		Hash: hash,
+		Path: relPath,
 	}
 }
 
 /*
-The method writes the changed or updated index file to from the *Index.
+Determine Git file mode
 */
-func (index *Index) Write(gitPath string) error {
-	indexPath := filepath.Join(gitPath, index_file)
+func gitMode(info os.FileInfo) string {
+	if info.Mode()&os.ModeSymlink != 0 {
+		return "120000"
+	}
+	if info.Mode()&0111 != 0 {
+		return "100755"
+	}
+	return "100644"
+}
 
-	file, err := os.Create(indexPath)
+/*
+Write a blob object (uncompressed but correct)
+*/
+func WriteBlob(repoRoot string, content []byte) string {
+	return WriteObject(repoRoot, "blob", content)
+}
+
+/*
+Write index to disk
+*/
+func (idx *Index) Write(gitPath string) error {
+	indexPath := filepath.Join(gitPath, indexFile)
+
+	f, err := os.Create(indexPath)
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer f.Close()
 
-	writer := bufio.NewWriter(file)
-	for path, hash := range index.files {
-		fmt.Fprintf(writer, "%s %s\n", hash, path)
+	paths := make([]string, 0, len(idx.Entries))
+	for p := range idx.Entries {
+		paths = append(paths, p)
 	}
-	return writer.Flush()
+	sort.Strings(paths)
+
+	w := bufio.NewWriter(f)
+	for _, path := range paths {
+		e := idx.Entries[path]
+		fmt.Fprintf(w, "%s %s %s\n", e.Mode, e.Hash, e.Path)
+	}
+	return w.Flush()
 }
 
 /*
-It parses the index file present at the gitPath to a Index structure.
-The index structure represents the file as path -> hash.
+Parse index from disk
 */
-func Parse(gitPath string) *Index {
-	indexPath := filepath.Join(gitPath, index_file)
-	index := &Index{files: make(map[string]string)}
+func ParseIndex(gitPath string) *Index {
+	idx := &Index{Entries: make(map[string]IndexEntry)}
 
-	file, err := os.Open(indexPath)
+	f, err := os.Open(filepath.Join(gitPath, indexFile))
 	if err != nil {
-		return index
+		return idx
 	}
-	defer file.Close()
+	defer f.Close()
 
-	scanner := bufio.NewScanner(file)
+	scanner := bufio.NewScanner(f)
 	for scanner.Scan() {
-		var hash, path string
-		fmt.Sscanf(scanner.Text(), "%s %s", &hash, &path)
-		index.files[path] = hash
+		line := scanner.Text()
+		parts := strings.SplitN(line, " ", 3)
+		if len(parts) != 3 {
+			continue
+		}
+
+		idx.Entries[parts[2]] = IndexEntry{
+			Mode: parts[0],
+			Hash: parts[1],
+			Path: parts[2],
+		}
 	}
-
-	return index
-}
-
-/*
-The method provides the sha256 hash of the given bytes.
-It returns the hex bytes encoded to string for storage.
-*/
-func FileHash(content []byte) string {
-	sum := sha256.Sum256(content)
-	return hex.EncodeToString(sum[:])
+	return idx
 }

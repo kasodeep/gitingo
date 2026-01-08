@@ -19,6 +19,40 @@
 - It uses the `bufio.Scanner` and `fmt.SScanf` to parse the required simple pattern.
 - Checking the isAll arg it modifies the index by walking the repoRoot and adding the file.
 
+```go
+package main
+
+import (
+    "bytes"
+    "compress/zlib"
+    "fmt"
+)
+
+func main() {
+    content := []byte("Hello Git!\n")
+    header := fmt.Sprintf("blob %d\x00", len(content))
+    data := append([]byte(header), content...)
+
+    var buf bytes.Buffer
+    zw := zlib.NewWriter(&buf)
+    zw.Write(data)
+    zw.Close()
+
+    compressed := buf.Bytes()
+    fmt.Printf("%x\n", compressed) // This is your packed object
+}
+```
+
 #### Status
 
 #### Commit
+
+Parse index
+    ↓
+Build in-memory tree hierarchy
+    ↓
+Serialize trees (binary)
+    ↓
+Write tree objects
+    ↓
+Create commit object

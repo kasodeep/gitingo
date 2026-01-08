@@ -2,7 +2,9 @@ package gitingo
 
 import (
 	"errors"
+	"os"
 
+	"github.com/kasodeep/gitingo/commands"
 	"github.com/spf13/cobra"
 )
 
@@ -16,8 +18,12 @@ var commitCmd = &cobra.Command{
 			return errors.New("commit message required (-m)")
 		}
 
-		// later:
-		// commands.Commit(commitMessage, printer.New())
+		cwd, err := os.Getwd()
+		if err != nil {
+			return err
+		}
+
+		commands.Commit(cwd, commitMessage)
 		return nil
 	},
 }
