@@ -4,7 +4,6 @@ import (
 	"os"
 
 	"github.com/kasodeep/gitingo/commands"
-	"github.com/kasodeep/gitingo/internal/printer"
 	"github.com/spf13/cobra"
 )
 
@@ -17,8 +16,7 @@ var initCmd = &cobra.Command{
 			return err
 		}
 
-		p := printer.NewPrettyPrinter()
-		commands.Init(cwd, p)
+		commands.Init(cwd)
 		return nil
 	},
 }

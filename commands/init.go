@@ -3,24 +3,25 @@ package commands
 import (
 	"os"
 	"path/filepath"
-
-	"github.com/kasodeep/gitingo/internal/printer"
 )
 
 var (
-	requiredDirs  = []string{"hooks", "objects", "refs", "info"}
+	requiredDirs  = []string{"hooks", "objects", refs_folder, "info"}
 	requiredFiles = []string{"HEAD", "config", "description", "index"}
 )
 
 const (
-	git_folder = ".gitingo"
+	git_folder   = ".gitingo"
+	refs_folder  = "refs"
+	heads_folder = "heads"
+	init_branch  = "main"
 )
 
 // Init initializes a new gitingo repository in the given working directory.
 // It creates the .git directory structure along with required files.
 //
 // Equivalent to: git init
-func Init(repoRoot string, p printer.Printer) {
+func Init(repoRoot string) {
 	gitDir := filepath.Join(repoRoot, git_folder)
 
 	if IsAlreadyInit(gitDir) {
@@ -34,6 +35,15 @@ func Init(repoRoot string, p printer.Printer) {
 	if err := createRequiredFiles(gitDir); err != nil {
 		p.Error(err.Error())
 	}
+
+	if err := initRefs(gitDir); err != nil {
+		p.Error(err.Error())
+	}
+
+	if err := initBranch(gitDir); err != nil {
+		p.Error(err.Error())
+	}
+
 	p.Success("Initialized empty gitingo repository")
 }
 
@@ -69,6 +79,41 @@ func createDirs(base string, names []string) error {
 		}
 	}
 	return nil
+}
+
+func initRefs(base string) error {
+	refDir := filepath.Join(base, refs_folder)
+
+	headsDir := filepath.Join(refDir, heads_folder)
+	if err := os.Mkdir(headsDir, 0755); err != nil {
+		return err
+	}
+
+	tagsDir := filepath.Join(refDir, "tags")
+	if err := os.Mkdir(tagsDir, 0755); err != nil {
+		return err
+	}
+	return nil
+}
+
+func initBranch(base string) error {
+	refDir := filepath.Join(base, refs_folder)
+	branchDir := filepath.Join(refDir, heads_folder, init_branch)
+
+	f, err := os.Create(branchDir)
+	if err != nil {
+		return err
+	}
+	f.Close()
+
+	f, err = os.Open(base + "HEAD")
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	_, err = f.Write([]byte("ref: " + branchDir))
+	return err
 }
 
 // IsAlreadyInit checks whether a Git repository already exists

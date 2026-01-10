@@ -46,25 +46,24 @@ func Commit(cwd string, msg string) {
 
 	headPath := path.Join(gitPath, "HEAD")
 	headBytes, _ := os.ReadFile(headPath)
-	headHash := strings.TrimSpace(string(headBytes))
+
+	parts := bytes.Split(headBytes, []byte(" "))
+	parentHash, _ := os.ReadFile(filepath.Join(gitPath, string(parts[1])))
 
 	// If HEAD exists, compare trees
-	if headHash != "" {
-		oldTreeHash := ReadCommitTreeHash(cwd, headHash)
+	if len(parentHash) != 0 {
+		oldTreeHash := ReadCommitTreeHash(cwd, string(parentHash))
 		if oldTreeHash == newTreeHash {
 			p.Warn("Nothing to commit...")
 			return
 		}
 	}
 
-	// Parent commit (if any)
-	parentHash := headHash
-
 	// Write commit
 	commitHash := WriteCommitObject(
 		cwd,
 		newTreeHash,
-		parentHash,
+		string(parentHash),
 		msg,
 	)
 
