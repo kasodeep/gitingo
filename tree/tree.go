@@ -54,17 +54,17 @@ func Create(index *index.Index) *TreeNode {
 /*
 WriteTree writes the entire tree and returns its hash.
 */
-func WriteTree(repoRoot string, root *TreeNode) string {
+func WriteTree(gitDir string, root *TreeNode) string {
 	var buf bytes.Buffer
-	writeNode(repoRoot, root, &buf)
-	return helper.WriteObject(repoRoot, "tree", buf.Bytes())
+	writeNode(gitDir, root, &buf)
+	return helper.WriteObject(gitDir, "tree", buf.Bytes())
 }
 
 /*
 writeNode serializes a tree node into the given writer.
 Subtrees are written first to obtain their hashes.
 */
-func writeNode(repoRoot string, node *TreeNode, w io.Writer) {
+func writeNode(gitDir string, node *TreeNode, w io.Writer) {
 	// --- Directories (sorted) ---
 	dirNames := make([]string, 0, len(node.Dirs))
 	for name := range node.Dirs {
@@ -75,7 +75,7 @@ func writeNode(repoRoot string, node *TreeNode, w io.Writer) {
 	for _, name := range dirNames {
 		sub := node.Dirs[name]
 
-		subHash := WriteTree(repoRoot, sub)
+		subHash := WriteTree(gitDir, sub)
 		hashBytes, _ := hex.DecodeString(subHash)
 
 		io.WriteString(w, "40000 ")

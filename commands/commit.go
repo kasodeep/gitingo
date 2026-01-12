@@ -30,7 +30,7 @@ func Commit(base string, msg string) error {
 		2. Create + write tree
 	*/
 	root := tree.Create(idx)
-	newTreeHash := tree.WriteTree(repo.WorkDir, root)
+	newTreeHash := tree.WriteTree(repo.GitDir, root)
 
 	/*
 		3. Resolve current branch ref
