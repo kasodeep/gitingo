@@ -16,8 +16,8 @@ var initCmd = &cobra.Command{
 			return err
 		}
 
-		commands.Init(cwd)
-		return nil
+		err = commands.Init(cwd)
+		return err
 	},
 }
 

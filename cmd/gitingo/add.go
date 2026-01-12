@@ -20,13 +20,8 @@ var addCmd = &cobra.Command{
 			return err
 		}
 
-		if len(args) == 1 && args[0] == "." {
-			commands.Add(cwd, nil, true)
-			return nil
-		}
-
-		commands.Add(cwd, args, false)
-		return nil
+		err = commands.Add(cwd, args)
+		return err
 	},
 }
 
