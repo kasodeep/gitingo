@@ -1,2 +1,3 @@
 /.gitingo
-bin/
+/bin
+/dummy_repo

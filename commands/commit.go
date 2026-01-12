@@ -40,7 +40,10 @@ func Commit(base string, msg string) error {
 	/*
 		3. Resolve parent commit
 	*/
-	branchRefPath, parentCommit := ReadParentCommit(repo)
+	branchRefPath, parentCommit, err := ReadParentCommit(repo)
+	if err != nil {
+		return err
+	}
 
 	/*
 	   4. Compare with parent commit (if exists)
@@ -83,7 +86,7 @@ func Commit(base string, msg string) error {
 }
 
 // TODO: Add proper error handling.
-func ReadParentCommit(repo *repository.Repository) (string, string) {
+func ReadParentCommit(repo *repository.Repository) (string, string, error) {
 	// Case 1: On a branch
 	if repo.CurrBranch != "" {
 		refPath := filepath.Join(
@@ -95,19 +98,19 @@ func ReadParentCommit(repo *repository.Repository) (string, string) {
 
 		data, err := os.ReadFile(refPath)
 		if err != nil {
-			return "", ""
+			return "", "", err
 		}
-		return refPath, strings.TrimSpace(string(data))
+		return refPath, strings.TrimSpace(string(data)), nil
 	}
 
 	// Case 2: Detached HEAD
 	headPath := filepath.Join(repo.GitDir, "HEAD")
 	data, err := os.ReadFile(headPath)
 	if err != nil {
-		return "", ""
+		return "", "", nil
 	}
 
-	return "", strings.TrimSpace(string(data))
+	return "", strings.TrimSpace(string(data)), nil
 }
 
 func ReadCommitTreeHash(repo *repository.Repository, commitHash string) string {
