@@ -9,12 +9,16 @@ import (
 )
 
 // <type> <size>\0<content>
-func WriteObject(gitDir, objType string, content []byte) string {
+func PrepareObject(objType string, content []byte) ([]byte, string) {
 	header := fmt.Sprintf("%s %d\x00", objType, len(content))
 	full := append([]byte(header), content...)
 
 	sum := sha256.Sum256(full)
-	hash := hex.EncodeToString(sum[:])
+	return full, hex.EncodeToString(sum[:])
+}
+
+func WriteObject(gitDir, objType string, content []byte) string {
+	full, hash := PrepareObject(objType, content)
 
 	objDir := filepath.Join(gitDir, "objects", hash[:2])
 	objPath := filepath.Join(objDir, hash[2:])
@@ -54,6 +58,14 @@ func ReadFileContent(path string) (mode string, content []byte, ok bool) {
 	return mode, data, true
 }
 
+func IsDirectory(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return info.IsDir()
+}
+
 func gitMode(info os.FileInfo) string {
 	if info.Mode()&os.ModeSymlink != 0 {
 		return "120000"
@@ -62,12 +74,4 @@ func gitMode(info os.FileInfo) string {
 		return "100755"
 	}
 	return "100644"
-}
-
-func IsDirectory(path string) bool {
-	info, err := os.Stat(path)
-	if err != nil {
-		return false
-	}
-	return info.IsDir()
 }

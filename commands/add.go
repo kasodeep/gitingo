@@ -20,7 +20,7 @@ func Add(base string, paths []string) error {
 	}
 
 	if len(paths) == 1 && paths[0] == "." {
-		idx.AddFromPath(repo, repo.WorkDir)
+		idx.AddFromPath(repo, repo.WorkDir, true)
 	} else {
 		idx.AddFiles(repo, paths)
 	}

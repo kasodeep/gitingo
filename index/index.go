@@ -100,9 +100,9 @@ func (idx *Index) AddFiles(repo *repository.Repository, files []string) {
 		}
 
 		if info.IsDir() {
-			idx.AddFromPath(repo, full)
+			idx.AddFromPath(repo, full, true)
 		} else {
-			idx.addFile(repo, full)
+			idx.addFile(repo, full, true)
 		}
 	}
 }
@@ -110,7 +110,7 @@ func (idx *Index) AddFiles(repo *repository.Repository, files []string) {
 /*
 Recursively add from path
 */
-func (idx *Index) AddFromPath(repo *repository.Repository, start string) {
+func (idx *Index) AddFromPath(repo *repository.Repository, start string, toWrite bool) {
 	filepath.WalkDir(start, func(curr string, d os.DirEntry, err error) error {
 		if err != nil {
 			return nil
@@ -124,7 +124,7 @@ func (idx *Index) AddFromPath(repo *repository.Repository, start string) {
 			return nil
 		}
 
-		idx.addFile(repo, curr)
+		idx.addFile(repo, curr, toWrite)
 		return nil
 	})
 }
@@ -132,13 +132,19 @@ func (idx *Index) AddFromPath(repo *repository.Repository, start string) {
 /*
 Add single file
 */
-func (idx *Index) addFile(repo *repository.Repository, fullPath string) {
+func (idx *Index) addFile(repo *repository.Repository, fullPath string, toWrite bool) {
 	mode, content, ok := helper.ReadFileContent(fullPath)
 	if !ok {
 		return
 	}
 
-	hash := helper.WriteObject(repo.GitDir, "blob", content)
+	var hash string
+	if toWrite {
+		hash = helper.WriteObject(repo.GitDir, "blob", content)
+	} else {
+		_, hash = helper.PrepareObject("blob", content)
+	}
+
 	relPath, err := filepath.Rel(repo.WorkDir, fullPath)
 	if err != nil {
 		return

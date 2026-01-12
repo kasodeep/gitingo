@@ -35,26 +35,18 @@ func Commit(base string, msg string) error {
 	/*
 		3. Resolve current branch ref
 	*/
-	var parentCommit string
 	branchRefPath := ""
 
-	if repo.CurrBranch != "" {
-		branchRefPath = filepath.Join(
-			repo.GitDir,
-			"refs",
-			"heads",
-			repo.CurrBranch,
-		)
-
-		parentBytes, _ := os.ReadFile(branchRefPath)
-		parentCommit = strings.TrimSpace(string(parentBytes))
-	}
+	/*
+		3. Resolve parent commit
+	*/
+	branchRefPath, parentCommit := ReadParentCommit(repo)
 
 	/*
-		4. Compare with parent commit (if exists)
+	   4. Compare with parent commit (if exists)
 	*/
 	if parentCommit != "" {
-		oldTreeHash := ReadCommitTreeHash(repo.GitDir, parentCommit)
+		oldTreeHash := ReadCommitTreeHash(repo, parentCommit)
 		if oldTreeHash == newTreeHash {
 			p.Warn("Nothing to commit...")
 			return nil
@@ -90,9 +82,37 @@ func Commit(base string, msg string) error {
 	return nil
 }
 
-func ReadCommitTreeHash(gitDir, commitHash string) string {
+// TODO: Add proper error handling.
+func ReadParentCommit(repo *repository.Repository) (string, string) {
+	// Case 1: On a branch
+	if repo.CurrBranch != "" {
+		refPath := filepath.Join(
+			repo.GitDir,
+			"refs",
+			"heads",
+			repo.CurrBranch,
+		)
+
+		data, err := os.ReadFile(refPath)
+		if err != nil {
+			return "", ""
+		}
+		return refPath, strings.TrimSpace(string(data))
+	}
+
+	// Case 2: Detached HEAD
+	headPath := filepath.Join(repo.GitDir, "HEAD")
+	data, err := os.ReadFile(headPath)
+	if err != nil {
+		return "", ""
+	}
+
+	return "", strings.TrimSpace(string(data))
+}
+
+func ReadCommitTreeHash(repo *repository.Repository, commitHash string) string {
 	objPath := filepath.Join(
-		gitDir,
+		repo.GitDir,
 		"objects",
 		commitHash[:2],
 		commitHash[2:],
