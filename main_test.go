@@ -19,12 +19,10 @@ func TestParseTree(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	hash := "235321f6b34a79fb8f5f9ae9ef06d893514f5b639b3b77ac66d89aa3af62da63"
+	hash := "606fd353bffdde26a0b42c7366165970661e123389fa9a3b6467fad0f5eebc79"
 
-	treeObj, err := tree.ParseTree(repo, hash)
+	_, err = tree.ParseTree(repo, hash)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	tree.PrintTree(treeObj, "")
 }

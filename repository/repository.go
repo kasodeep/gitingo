@@ -41,7 +41,7 @@ func NewRepository(base string) *Repository {
 		GitFolder:  gitFolder,
 		GitDir:     filepath.Join(base, gitFolder),
 		CurrBranch: initBranch,
-		IsDetached: false,
+		IsDetached: true,
 	}
 }
 

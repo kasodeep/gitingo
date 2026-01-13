@@ -112,6 +112,10 @@ func writeNode(gitDir string, node *TreeNode, w io.Writer) {
 	}
 }
 
+/*
+It iterates over the tree and creates the index.
+Recursively calls the func when encountering a directory.
+*/
 func TreeToIndex(idx *index.Index, node *TreeNode, path string) {
 	for p, e := range node.Files {
 		idx.Entries[filepath.Join(path, p)] = e
@@ -122,6 +126,12 @@ func TreeToIndex(idx *index.Index, node *TreeNode, path string) {
 	}
 }
 
+/*
+The method takes the hash and repo to read the file, and parse the tree.
+1. It reads the parent tree, and cuts the data at byte 0.
+2. The it extracts the mode with space byte.
+3. Then the name with byte{0} with hash of length 32.
+*/
 func ParseTree(repo *repository.Repository, hash string) (*TreeNode, error) {
 	root := NewTree()
 
@@ -131,12 +141,12 @@ func ParseTree(repo *repository.Repository, hash string) (*TreeNode, error) {
 		return nil, err
 	}
 
-	nul := bytes.IndexByte(data, 0)
-	if nul == -1 {
+	_, after, ok := bytes.Cut(data, []byte{0})
+	if !ok {
 		return nil, fmt.Errorf("invalid tree object")
 	}
 
-	content := data[nul+1:]
+	content := after
 	i := 0
 	for i < len(content) {
 		// 1. mode
@@ -180,37 +190,4 @@ func ParseTree(repo *repository.Repository, hash string) (*TreeNode, error) {
 	}
 
 	return root, nil
-}
-
-// PrintTree prints the tree structure recursively.
-func PrintTree(node *TreeNode, prefix string) {
-	// --- Print directories (sorted) ---
-	dirNames := make([]string, 0, len(node.Dirs))
-	for name := range node.Dirs {
-		dirNames = append(dirNames, name)
-	}
-	sort.Strings(dirNames)
-
-	for _, name := range dirNames {
-		fmt.Printf("%s📁 %s/\n", prefix, name)
-		PrintTree(node.Dirs[name], prefix+"  ")
-	}
-
-	// --- Print files (sorted) ---
-	fileNames := make([]string, 0, len(node.Files))
-	for name := range node.Files {
-		fileNames = append(fileNames, name)
-	}
-	sort.Strings(fileNames)
-
-	for _, name := range fileNames {
-		entry := node.Files[name]
-		fmt.Printf(
-			"%s📄 %s (%s %s)\n",
-			prefix,
-			name,
-			entry.Mode,
-			entry.Hash[:7], // short hash
-		)
-	}
 }
