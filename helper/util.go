@@ -8,7 +8,10 @@ import (
 	"path/filepath"
 )
 
-// <type> <size>\0<content>
+/*
+It prepares the object by appending the <entry> -> <type> <size>\0<content>
+In recursive format the obj will have <type> <size>\0<entry><entry>
+*/
 func PrepareObject(objType string, content []byte) ([]byte, string) {
 	header := fmt.Sprintf("%s %d\x00", objType, len(content))
 	full := append([]byte(header), content...)
@@ -17,6 +20,10 @@ func PrepareObject(objType string, content []byte) ([]byte, string) {
 	return full, hex.EncodeToString(sum[:])
 }
 
+/*
+It uses prepare object to get the required file content.
+Then writes to objects folder with hash[:2]/hash[2:] format.
+*/
 func WriteObject(gitDir, objType string, content []byte) string {
 	full, hash := PrepareObject(objType, content)
 
@@ -34,6 +41,10 @@ func WriteObject(gitDir, objType string, content []byte) string {
 	return hash
 }
 
+/*
+The methods opens the file stat, maps them to git modes for specificity.
+Then, it returns the mode, content read, along with a bool indicator.
+*/
 func ReadFileContent(path string) (mode string, content []byte, ok bool) {
 	info, err := os.Lstat(path)
 	if err != nil {
@@ -58,6 +69,9 @@ func ReadFileContent(path string) (mode string, content []byte, ok bool) {
 	return mode, data, true
 }
 
+/*
+Checks if the given path is a directory or not.
+*/
 func IsDirectory(path string) bool {
 	info, err := os.Stat(path)
 	if err != nil {

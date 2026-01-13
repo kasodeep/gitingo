@@ -17,12 +17,16 @@ import (
 
 /*
 TreeNode represents an in-memory hierarchical tree built from the flat index.
+Similar to TrieNode, but consisting of maps for keys.
 */
 type TreeNode struct {
 	Files map[string]index.IndexEntry
 	Dirs  map[string]*TreeNode
 }
 
+/*
+Returns a new blank tree.
+*/
 func NewTree() *TreeNode {
 	return &TreeNode{
 		Files: make(map[string]index.IndexEntry),
@@ -32,6 +36,7 @@ func NewTree() *TreeNode {
 
 /*
 Create converts a flat index into a hierarchical tree.
+One of the best methods, logic :)
 */
 func Create(index *index.Index) *TreeNode {
 	root := NewTree()
@@ -56,6 +61,7 @@ func Create(index *index.Index) *TreeNode {
 
 /*
 WriteTree writes the entire tree and returns its hash.
+It recursively writes the files and subtree objects first while getting it's content/hash.
 */
 func WriteTree(gitDir string, root *TreeNode) string {
 	var buf bytes.Buffer

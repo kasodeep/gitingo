@@ -37,7 +37,7 @@ func Status(base string) error {
 
 	CompareStaged(currIndex, wdIndex, "index check")
 
-	_, parentCommit, _ := ReadParentCommit(repo)
+	parentCommit, _ := repo.ReadHead()
 	var oldTreeHash string
 	if parentCommit != "" {
 		oldTreeHash = ReadCommitTreeHash(repo, parentCommit)

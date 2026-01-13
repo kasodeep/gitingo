@@ -14,22 +14,32 @@ import (
 
 const indexFile = "index"
 
+/*
+Represents the line to be written for each file being tracked in the index directory.
+*/
 type IndexEntry struct {
 	Mode string
 	Hash string
 	Path string
 }
 
+/*
+Flat map for the index file, with each path mapped to it's entry
+*/
 type Index struct {
 	Entries map[string]IndexEntry
 }
 
+/*
+Creates a new empty index and returns it's reference.
+*/
 func NewIndex() *Index {
 	return &Index{Entries: make(map[string]IndexEntry)}
 }
 
 /*
-Parse index from disk.
+Parse loads the index file, using the bufio scanner.
+It reads each line and splits based on space, to get the index entry parts.
 */
 func (idx *Index) Parse(repo *repository.Repository) error {
 	f, err := os.Open(filepath.Join(repo.GitDir, indexFile))
@@ -54,7 +64,8 @@ func (idx *Index) Parse(repo *repository.Repository) error {
 }
 
 /*
-Write index to disk
+1. Prunes the index file.
+2. Write index to disk using bufio Writer.
 */
 func (idx *Index) Write(repo *repository.Repository) error {
 	idx.pruneMissing(repo)
@@ -65,6 +76,7 @@ func (idx *Index) Write(repo *repository.Repository) error {
 	}
 	defer f.Close()
 
+	// sort the paths.
 	paths := make([]string, 0, len(idx.Entries))
 	for p := range idx.Entries {
 		paths = append(paths, p)
@@ -79,6 +91,10 @@ func (idx *Index) Write(repo *repository.Repository) error {
 	return w.Flush()
 }
 
+/*
+When a file added for tracking and we delete it from the working directory.
+We need to remove it from the index file as well.
+*/
 func (idx *Index) pruneMissing(repo *repository.Repository) {
 	for path := range idx.Entries {
 		full := filepath.Join(repo.WorkDir, filepath.FromSlash(path))
@@ -89,7 +105,8 @@ func (idx *Index) pruneMissing(repo *repository.Repository) {
 }
 
 /*
-Add files explicitly
+Add files explicitly, given by the path passed as args/parameters.
+It checks if the given file is directory or not and call the appropiate method.
 */
 func (idx *Index) AddFiles(repo *repository.Repository, files []string) {
 	for _, file := range files {
@@ -108,7 +125,8 @@ func (idx *Index) AddFiles(repo *repository.Repository, files []string) {
 }
 
 /*
-Recursively add from path
+It walks the entire directory from the start and visits each file/folder.
+toWrite - It represents the state wether to write the blob on to the disk / or only updated the idx.
 */
 func (idx *Index) AddFromPath(repo *repository.Repository, start string, toWrite bool) {
 	filepath.WalkDir(start, func(curr string, d os.DirEntry, err error) error {
@@ -130,7 +148,8 @@ func (idx *Index) AddFromPath(repo *repository.Repository, start string, toWrite
 }
 
 /*
-Add single file
+The methods reads the file content, writes or prepares the obj as needed for the hash.
+Updates the index entry by comparing with the current state.
 */
 func (idx *Index) addFile(repo *repository.Repository, fullPath string, toWrite bool) {
 	mode, content, ok := helper.ReadFileContent(fullPath)

@@ -33,14 +33,9 @@ func Commit(base string, msg string) error {
 	newTreeHash := tree.WriteTree(repo.GitDir, root)
 
 	/*
-		3. Resolve current branch ref
-	*/
-	branchRefPath := ""
-
-	/*
 		3. Resolve parent commit
 	*/
-	branchRefPath, parentCommit, err := ReadParentCommit(repo)
+	parentCommit, err := repo.ReadHead()
 	if err != nil {
 		return err
 	}
@@ -67,16 +62,9 @@ func Commit(base string, msg string) error {
 	)
 
 	/*
-		6. Update branch ref (or HEAD if detached)
+		6. Write the commit pointer to head.
 	*/
-	if branchRefPath != "" {
-		err = os.WriteFile(branchRefPath, []byte(commitHash+"\n"), 0644)
-	} else {
-		// detached HEAD fallback
-		headPath := filepath.Join(repo.GitDir, "HEAD")
-		err = os.WriteFile(headPath, []byte(commitHash+"\n"), 0644)
-	}
-
+	err = repo.WriteHead([]byte(commitHash))
 	if err != nil {
 		return err
 	}
@@ -85,41 +73,11 @@ func Commit(base string, msg string) error {
 	return nil
 }
 
-// TODO: Add proper error handling.
-func ReadParentCommit(repo *repository.Repository) (string, string, error) {
-	// Case 1: On a branch
-	if repo.CurrBranch != "" {
-		refPath := filepath.Join(
-			repo.GitDir,
-			"refs",
-			"heads",
-			repo.CurrBranch,
-		)
-
-		data, err := os.ReadFile(refPath)
-		if err != nil {
-			return "", "", err
-		}
-		return refPath, strings.TrimSpace(string(data)), nil
-	}
-
-	// Case 2: Detached HEAD
-	headPath := filepath.Join(repo.GitDir, "HEAD")
-	data, err := os.ReadFile(headPath)
-	if err != nil {
-		return "", "", nil
-	}
-
-	return "", strings.TrimSpace(string(data)), nil
-}
-
+/*
+The method takes a commit hash and repository, try to read the parent hash in the process.
+*/
 func ReadCommitTreeHash(repo *repository.Repository, commitHash string) string {
-	objPath := filepath.Join(
-		repo.GitDir,
-		"objects",
-		commitHash[:2],
-		commitHash[2:],
-	)
+	objPath := filepath.Join(repo.GitDir, "objects", commitHash[:2], commitHash[2:])
 
 	data, err := os.ReadFile(objPath)
 	if err != nil {
@@ -142,12 +100,11 @@ func ReadCommitTreeHash(repo *repository.Repository, commitHash string) string {
 	return ""
 }
 
-func WriteCommitObject(
-	gitDir string,
-	treeHash string,
-	parentHash string,
-	message string,
-) string {
+/*
+It formats the commit obj with the parent hash and the tree hash.
+Writes the commit message and call the helper.WriteObject to write the commit to disk.
+*/
+func WriteCommitObject(gitDir string, treeHash string, parentHash string, message string) string {
 	var buf bytes.Buffer
 
 	buf.WriteString("tree ")
