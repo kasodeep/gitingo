@@ -1,18 +1,11 @@
 package gitingo
 
 import (
-	"errors"
 	"fmt"
 	"os"
 
 	"github.com/kasodeep/gitingo/commands"
 	"github.com/spf13/cobra"
-)
-
-var (
-	resetSoft  bool
-	resetMixed bool
-	resetHard  bool
 )
 
 var resetCmd = &cobra.Command{
@@ -23,27 +16,17 @@ var resetCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		commit := args[0]
 
-		// default mode = mixed
-		modeCount := 0
-		if resetSoft {
-			modeCount++
-		}
-		if resetMixed {
-			modeCount++
-		}
-		if resetHard {
-			modeCount++
-		}
-
-		if modeCount > 1 {
-			return errors.New("only one of --soft, --mixed, or --hard may be specified")
-		}
+		soft, _ := cmd.Flags().GetBool("soft")
+		mixed, _ := cmd.Flags().GetBool("mixed")
+		hard, _ := cmd.Flags().GetBool("hard")
 
 		mode := "mixed"
-		if resetSoft {
+		if soft {
 			mode = "soft"
-		} else if resetHard {
+		} else if hard {
 			mode = "hard"
+		} else if mixed {
+			mode = "mixed"
 		}
 
 		cwd, err := os.Getwd()
@@ -51,7 +34,6 @@ var resetCmd = &cobra.Command{
 			return err
 		}
 
-		// Call your core reset logic
 		if err := commands.Reset(cwd, commit, mode); err != nil {
 			return err
 		}
@@ -62,9 +44,11 @@ var resetCmd = &cobra.Command{
 }
 
 func init() {
-	resetCmd.Flags().BoolVar(&resetSoft, "soft", false, "reset HEAD only")
-	resetCmd.Flags().BoolVar(&resetMixed, "mixed", false, "reset HEAD and index (default)")
-	resetCmd.Flags().BoolVar(&resetHard, "hard", false, "reset HEAD, index, and working tree")
+	flags := resetCmd.Flags()
+	flags.Bool("soft", false, "reset HEAD only")
+	flags.Bool("mixed", false, "reset HEAD and index (default)")
+	flags.Bool("hard", false, "reset HEAD, index, and working tree")
 
+	resetCmd.MarkFlagsMutuallyExclusive("soft", "mixed", "hard")
 	rootCmd.AddCommand(resetCmd)
 }

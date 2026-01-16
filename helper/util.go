@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 )
 
 /*
@@ -39,6 +40,24 @@ func WriteObject(gitDir, objType string, content []byte) string {
 	_ = os.WriteFile(objPath, full, 0644)
 
 	return hash
+}
+
+func VerifyObject(gitDir string, hash string, obj string) error {
+	if len(hash) < 6 {
+		return fmt.Errorf("hash too short")
+	}
+
+	objPath := filepath.Join(gitDir, "objects", hash[:2], hash[2:])
+	data, err := os.ReadFile(objPath)
+	if err != nil {
+		return fmt.Errorf("object not found: %s", hash)
+	}
+
+	if !strings.HasPrefix(string(data), obj) {
+		return fmt.Errorf("object is not a type of %s", obj)
+	}
+
+	return nil
 }
 
 /*

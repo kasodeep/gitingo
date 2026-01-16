@@ -112,3 +112,21 @@ func (repo *Repository) WriteHead(commitHash []byte) error {
 
 	return nil
 }
+
+/*
+The method reads the old head, updates the track or timeline accordingly.
+Then, it writes the new head back.
+*/
+func (repo *Repository) UpdateHeadWithLog(newHash string, msg string) error {
+	oldHash, err := repo.ReadHead()
+	if err != nil {
+		return err
+	}
+
+	// write reflogs only if old hash exists.
+	if oldHash != "" {
+		repo.WriteRefLog(oldHash, newHash, msg)
+	}
+
+	return repo.WriteHead([]byte(newHash))
+}
