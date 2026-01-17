@@ -191,3 +191,28 @@ func ParseTree(repo *repository.Repository, hash string) (*TreeNode, error) {
 
 	return root, nil
 }
+
+/*
+The func writes the given tree to the working directory by override of the workspace.
+*/
+func WriteReverse(repo *repository.Repository, node *TreeNode, base string) error {
+	for path, entry := range node.Dirs {
+		WriteReverse(repo, entry, filepath.Join(base, path))
+	}
+
+	for file, entry := range node.Files {
+		content, ok := helper.ReadObject(repo.GitDir, entry.Hash)
+		if !ok {
+			return fmt.Errorf("unable to read the file %s", file)
+		}
+
+		path := filepath.Join(repo.WorkDir, base, file)
+		err := os.WriteFile(path, content, 0644)
+		if err != nil {
+			// TODO: How do we think in terms of fail safe. If some files written other cause error.
+			return err
+		}
+	}
+
+	return nil
+}

@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,8 +11,8 @@ import (
 func (r *Repository) CreateBranch(name string) error {
 	headsPath := filepath.Join(r.GitDir, refsFolder, headsDir)
 
-	// refs/heads/main
-	branchPath := filepath.Join(headsPath, initBranch)
+	// refs/heads/{name}
+	branchPath := filepath.Join(headsPath, name)
 	f, err := os.Create(branchPath)
 	if err != nil {
 		return err
@@ -20,8 +21,46 @@ func (r *Repository) CreateBranch(name string) error {
 }
 
 /*
+It reads the heads directory and returns the list of branches.
+*/
+func (r *Repository) ListBranches() ([]string, error) {
+	headsPath := filepath.Join(r.GitDir, refsFolder, headsDir)
+
+	dirEntry, err := os.ReadDir(headsPath)
+	if err != nil {
+		return nil, err
+	}
+
+	branches := make([]string, 0, len(dirEntry))
+	for _, entry := range dirEntry {
+		if !entry.IsDir() {
+			branches = append(branches, entry.Name())
+		}
+	}
+
+	return branches, nil
+}
+
+func (r *Repository) ReadBranch(name string) (string, error) {
+	return "", nil
+}
+
+/*
+Returns true if the branch file exists or not.
+*/
+func (r *Repository) IsBranchExists(name string) bool {
+	branchPath := filepath.Join(r.GitDir, refsFolder, headsDir, name)
+	_, err := os.Stat(branchPath)
+
+	if errors.Is(err, os.ErrNotExist) {
+		return false
+	}
+	return err == nil
+}
+
+/*
 The func loads the HEAD file, and reads it's content.
-It the head is deatched it marks the bool as true, otherwise loads the branch name in the repo.
+It the head is deatched it marks the bool as true, otherwise loads the branch name in the head.
 */
 func (r *Repository) LoadCurrentBranch() error {
 	headPath := filepath.Join(r.GitDir, "HEAD")
@@ -45,23 +84,35 @@ func (r *Repository) LoadCurrentBranch() error {
 }
 
 /*
-initHEAD initializes the reference of the head to the curr branch of the repository.
+AttachHead makes HEAD a symbolic reference to the given branch.
+
+This transitions the repository out of detached HEAD state by
+pointing HEAD to refs/heads/<branch>. The branch must already exist.
 */
-func (r *Repository) AttachHead() error {
+func (r *Repository) AttachHead(branch string) error {
 	headPath := filepath.Join(r.GitDir, "HEAD")
 
-	if !r.IsDetached {
-		return fmt.Errorf("head is already attached to branch: %s", r.CurrBranch)
+	ok := r.IsBranchExists(branch)
+	if !ok {
+		return fmt.Errorf("branch does not exists.")
 	}
 
 	content := fmt.Sprintf(
 		"ref: %s/%s/%s\n",
 		refsFolder,
 		headsDir,
-		r.CurrBranch,
+		branch,
 	)
 
-	return os.WriteFile(headPath, []byte(content), 0644)
+	if err := os.WriteFile(headPath, []byte(content), 0644); err != nil {
+		return err
+	}
+
+	// Update in-memory state
+	r.IsDetached = false
+	r.CurrBranch = branch
+
+	return nil
 }
 
 /*

@@ -21,10 +21,10 @@ func Reset(base string, hash string, mode string) error {
 	switch mode {
 	case "soft":
 		return handleSoftReset(repo, hash)
+	case "mixed":
+		return handleMixedReset(repo, hash)
 	case "hard":
 		return handleHardReset(repo, hash)
-	case "mixed":
-		return handleMediumReset(repo, hash)
 	default:
 		return fmt.Errorf("Invalid format")
 	}
@@ -43,28 +43,55 @@ func handleSoftReset(repo *repository.Repository, hash string) error {
 }
 
 /*
-What is a medium reset?
+What is a mixed reset?
 We change the head and also apply the changes of the hash to the index.
 */
-func handleMediumReset(repo *repository.Repository, hash string) error {
-	err := handleSoftReset(repo, hash)
+func handleMixedReset(repo *repository.Repository, hash string) error {
+	if err := helper.VerifyObject(repo.GitDir, hash, "commit"); err != nil {
+		return err
+	}
+
+	if _, err := applyCommitToIndex(repo, hash); err != nil {
+		return err
+	}
+
+	return repo.UpdateHeadWithLog(hash, "reset --mixed")
+}
+
+/*
+We want to override the filesystem, the logic should be implemented by the tree as we want to read the blobs.
+*/
+func handleHardReset(repo *repository.Repository, hash string) error {
+	if err := helper.VerifyObject(repo.GitDir, hash, "commit"); err != nil {
+		return err
+	}
+
+	root, err := applyCommitToIndex(repo, hash)
 	if err != nil {
 		return err
 	}
 
-	treeHash := ReadCommitTreeHash(repo, hash)
+	if err := tree.WriteReverse(repo, root, ""); err != nil {
+		return err
+	}
+
+	return repo.UpdateHeadWithLog(hash, "reset --hard")
+}
+
+/*
+Helper func to read the tree hash from the commit, apply the changes to index by parsing from tree.
+*/
+func applyCommitToIndex(repo *repository.Repository, commitHash string) (*tree.TreeNode, error) {
+	treeHash := ReadCommitTreeHash(repo, commitHash)
+
 	root, err := tree.ParseTree(repo, treeHash)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	idx := index.NewIndex()
 	tree.TreeToIndex(idx, root, "")
-
 	idx.Write(repo)
-	return nil
-}
 
-func handleHardReset(repo *repository.Repository, hash string) error {
-	return nil
+	return root, nil
 }

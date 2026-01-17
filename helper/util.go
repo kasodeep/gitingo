@@ -1,6 +1,7 @@
 package helper
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -58,6 +59,21 @@ func VerifyObject(gitDir string, hash string, obj string) error {
 	}
 
 	return nil
+}
+
+/*
+It reads the object with hash, separates the metadata from the []byte{0}.
+Returns the content and the bool.
+*/
+func ReadObject(gitDir, hash string) ([]byte, bool) {
+	objPath := filepath.Join(gitDir, "objects", hash[:2], hash[2:])
+	data, err := os.ReadFile(objPath)
+	if err != nil {
+		return nil, false
+	}
+
+	_, content, ok := bytes.Cut(data, []byte{0})
+	return content, ok
 }
 
 /*

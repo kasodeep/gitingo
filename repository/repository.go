@@ -72,7 +72,7 @@ func (r *Repository) Create() error {
 		return err
 	}
 
-	if err := r.AttachHead(); err != nil {
+	if err := r.AttachHead(initBranch); err != nil {
 		return err
 	}
 

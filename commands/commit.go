@@ -2,8 +2,6 @@ package commands
 
 import (
 	"bytes"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -77,15 +75,8 @@ func Commit(base string, msg string) error {
 The method takes a commit hash and repository, try to read the parent hash in the process.
 */
 func ReadCommitTreeHash(repo *repository.Repository, commitHash string) string {
-	objPath := filepath.Join(repo.GitDir, "objects", commitHash[:2], commitHash[2:])
-
-	data, err := os.ReadFile(objPath)
-	if err != nil {
-		return ""
-	}
-
 	// Strip "commit <size>\0"
-	_, content, ok := bytes.Cut(data, []byte{0})
+	content, ok := helper.ReadObject(repo.GitDir, commitHash)
 	if !ok {
 		return ""
 	}
