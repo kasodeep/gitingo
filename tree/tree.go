@@ -132,7 +132,7 @@ The method takes the hash and repo to read the file, and parse the tree.
 2. The it extracts the mode with space byte.
 3. Then the name with byte{0} with hash of length 32.
 */
-func ParseTree(repo *repository.Repository, hash string) (*TreeNode, error) {
+func ParseTree(repo *repository.Repository, hash string, base string) (*TreeNode, error) {
 	root := NewTree()
 
 	treePath := filepath.Join(repo.GitDir, "objects", hash[:2], hash[2:])
@@ -175,7 +175,7 @@ func ParseTree(repo *repository.Repository, hash string) (*TreeNode, error) {
 		// 4. attach to tree
 		if mode == "40000" {
 			// Recursively parse the subtree
-			subTree, err := ParseTree(repo, hash)
+			subTree, err := ParseTree(repo, hash, filepath.Join(base, name))
 			if err != nil {
 				return nil, err
 			}
@@ -184,6 +184,7 @@ func ParseTree(repo *repository.Repository, hash string) (*TreeNode, error) {
 			root.Files[name] = index.IndexEntry{
 				Mode: mode,
 				Hash: hash,
+				Path: filepath.Join(base, name),
 			}
 		}
 

@@ -127,7 +127,14 @@ func (r *Repository) initRefs() error {
 		return err
 	}
 
-	return r.CreateBranch(r.CurrBranch)
+	// refs/heads/{name}
+	branchPath := filepath.Join(headsPath, r.CurrBranch)
+	f, err := os.Create(branchPath)
+	if err != nil {
+		return err
+	}
+
+	return f.Close()
 }
 
 /*

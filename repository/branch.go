@@ -9,15 +9,16 @@ import (
 )
 
 func (r *Repository) CreateBranch(name string) error {
+	hash, err := r.ReadHead()
+	if err != nil || hash == "" {
+		return fmt.Errorf("no commit yet, please change the branch name")
+	}
+
 	headsPath := filepath.Join(r.GitDir, refsFolder, headsDir)
 
 	// refs/heads/{name}
 	branchPath := filepath.Join(headsPath, name)
-	f, err := os.Create(branchPath)
-	if err != nil {
-		return err
-	}
-	return f.Close()
+	return os.WriteFile(branchPath, []byte(hash), 0644)
 }
 
 /*
@@ -39,10 +40,6 @@ func (r *Repository) ListBranches() ([]string, error) {
 	}
 
 	return branches, nil
-}
-
-func (r *Repository) ReadBranch(name string) (string, error) {
-	return "", nil
 }
 
 /*

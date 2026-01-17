@@ -51,7 +51,7 @@ func handleMixedReset(repo *repository.Repository, hash string) error {
 		return err
 	}
 
-	if _, err := applyCommitToIndex(repo, hash); err != nil {
+	if _, err := ApplyCommitToIndex(repo, hash); err != nil {
 		return err
 	}
 
@@ -66,7 +66,7 @@ func handleHardReset(repo *repository.Repository, hash string) error {
 		return err
 	}
 
-	root, err := applyCommitToIndex(repo, hash)
+	root, err := ApplyCommitToIndex(repo, hash)
 	if err != nil {
 		return err
 	}
@@ -81,10 +81,10 @@ func handleHardReset(repo *repository.Repository, hash string) error {
 /*
 Helper func to read the tree hash from the commit, apply the changes to index by parsing from tree.
 */
-func applyCommitToIndex(repo *repository.Repository, commitHash string) (*tree.TreeNode, error) {
+func ApplyCommitToIndex(repo *repository.Repository, commitHash string) (*tree.TreeNode, error) {
 	treeHash := ReadCommitTreeHash(repo, commitHash)
 
-	root, err := tree.ParseTree(repo, treeHash)
+	root, err := tree.ParseTree(repo, treeHash, "")
 	if err != nil {
 		return nil, err
 	}

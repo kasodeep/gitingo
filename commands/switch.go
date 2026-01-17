@@ -1,34 +1,52 @@
 package commands
 
 import (
-	"fmt"
-
 	"github.com/kasodeep/gitingo/repository"
+	"github.com/kasodeep/gitingo/tree"
 )
 
-// TODO: Implement the hash strategy later.
 /*
-1. check using repo if the branch exists or not.
-2. check the status of the current head.
-3. if clean, initiate switch, now the name is branch name.
-	a. if no hash, hash of head to that new branch
-	b. if hash, we perform a reset.
+TODO: Implement the hash strategy later.
+When we create a branch the hash cannot be empty, it must point to the current HEAD, if no commit, we reject.
 */
-func Switch(base string, branch string) error {
+func Switch(base string, branch string, create bool) error {
 	repo, err := repository.GetRepository(base)
 	if err != nil {
 		return err
 	}
 
-	ok := repo.IsBranchExists(branch)
-	if !ok {
-		return fmt.Errorf("the branch with current name does not exists.")
+	err = Check(repo)
+	if err != nil {
+		return err
 	}
 
-	// status check
+	if create {
+		err := repo.CreateBranch(branch)
+		if err != nil {
+			return err
+		}
+	}
+	err = repo.AttachHead(branch)
+	if err != nil {
+		return err
+	}
+	return ResetBranch(repo)
+}
 
-	// attach head
-	// read head for hash -> check if it exists, or don't
-	// use hard reset funcs
+func ResetBranch(repo *repository.Repository) error {
+	hash, err := repo.ReadHead()
+	if err != nil {
+		return err
+	}
+
+	root, err := ApplyCommitToIndex(repo, hash)
+	if err != nil {
+		return err
+	}
+
+	if err := tree.WriteReverse(repo, root, ""); err != nil {
+		return err
+	}
+
 	return nil
 }
