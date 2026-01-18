@@ -1,13 +1,16 @@
 package commands
 
 import (
+	"errors"
+
+	"github.com/kasodeep/gitingo/helper"
 	"github.com/kasodeep/gitingo/repository"
 	"github.com/kasodeep/gitingo/tree"
 )
 
 /*
-TODO: Implement the hash strategy later.
 When we create a branch the hash cannot be empty, it must point to the current HEAD, if no commit, we reject.
+First we need to check for the `branch` to exists, else we need the hash flow.
 */
 func Switch(base string, branch string, create bool) error {
 	repo, err := repository.GetRepository(base)
@@ -20,13 +23,23 @@ func Switch(base string, branch string, create bool) error {
 		return err
 	}
 
+	err = SwitchBranch(repo, branch, create)
+	if errors.Is(err, repository.ErrBranchNotExists) && !create {
+		return SwitchHash(repo, branch)
+	}
+
+	return err
+}
+
+func SwitchBranch(repo *repository.Repository, branch string, create bool) error {
 	if create {
 		err := repo.CreateBranch(branch)
 		if err != nil {
 			return err
 		}
 	}
-	err = repo.AttachHead(branch)
+
+	err := repo.AttachHead(branch)
 	if err != nil {
 		return err
 	}
@@ -39,14 +52,28 @@ func ResetBranch(repo *repository.Repository) error {
 		return err
 	}
 
+	return CheckoutCommit(repo, hash)
+}
+
+func SwitchHash(repo *repository.Repository, hash string) error {
+	if err := helper.VerifyObject(repo.GitDir, hash, "commit"); err != nil {
+		return err
+	}
+
+	err := CheckoutCommit(repo, hash)
+	if err != nil {
+		return err
+	}
+
+	return repo.DeattachHead(hash)
+}
+
+// Don’t refactor just because code looks similar, Refactor when you can name the intent.
+func CheckoutCommit(repo *repository.Repository, hash string) error {
 	root, err := ApplyCommitToIndex(repo, hash)
 	if err != nil {
 		return err
 	}
 
-	if err := tree.WriteReverse(repo, root, ""); err != nil {
-		return err
-	}
-
-	return nil
+	return tree.WriteReverse(repo, root, "")
 }

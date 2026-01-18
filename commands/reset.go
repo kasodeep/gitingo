@@ -66,12 +66,7 @@ func handleHardReset(repo *repository.Repository, hash string) error {
 		return err
 	}
 
-	root, err := ApplyCommitToIndex(repo, hash)
-	if err != nil {
-		return err
-	}
-
-	if err := tree.WriteReverse(repo, root, ""); err != nil {
+	if err := CheckoutCommit(repo, hash); err != nil {
 		return err
 	}
 

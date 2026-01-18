@@ -8,6 +8,8 @@ import (
 	"strings"
 )
 
+var ErrBranchNotExists = errors.New("branch does not exist")
+
 func (r *Repository) CreateBranch(name string) error {
 	hash, err := r.ReadHead()
 	if err != nil || hash == "" {
@@ -91,7 +93,7 @@ func (r *Repository) AttachHead(branch string) error {
 
 	ok := r.IsBranchExists(branch)
 	if !ok {
-		return fmt.Errorf("branch does not exists.")
+		return ErrBranchNotExists
 	}
 
 	content := fmt.Sprintf(
@@ -108,6 +110,19 @@ func (r *Repository) AttachHead(branch string) error {
 	// Update in-memory state
 	r.IsDetached = false
 	r.CurrBranch = branch
+
+	return nil
+}
+
+func (r *Repository) DeattachHead(hash string) error {
+	headPath := filepath.Join(r.GitDir, "HEAD")
+	if err := os.WriteFile(headPath, []byte(hash), 0644); err != nil {
+		return err
+	}
+
+	// Update in-memory state
+	r.IsDetached = true
+	r.CurrBranch = ""
 
 	return nil
 }
