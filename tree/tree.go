@@ -135,18 +135,11 @@ The method takes the hash and repo to read the file, and parse the tree.
 func ParseTree(repo *repository.Repository, hash string, base string) (*TreeNode, error) {
 	root := NewTree()
 
-	treePath := filepath.Join(repo.GitDir, "objects", hash[:2], hash[2:])
-	data, err := os.ReadFile(treePath)
-	if err != nil {
-		return nil, err
-	}
-
-	_, after, ok := bytes.Cut(data, []byte{0})
+	content, ok := helper.ReadObject(repo.GitDir, hash)
 	if !ok {
-		return nil, fmt.Errorf("invalid tree object")
+		return nil, fmt.Errorf("cannot find object with hash %s", hash)
 	}
 
-	content := after
 	i := 0
 	for i < len(content) {
 		// 1. mode

@@ -4,9 +4,7 @@ import (
 	"fmt"
 
 	"github.com/kasodeep/gitingo/helper"
-	"github.com/kasodeep/gitingo/index"
 	"github.com/kasodeep/gitingo/repository"
-	"github.com/kasodeep/gitingo/tree"
 )
 
 /*
@@ -71,22 +69,4 @@ func handleHardReset(repo *repository.Repository, hash string) error {
 	}
 
 	return repo.UpdateHeadWithLog(hash, "reset --hard")
-}
-
-/*
-Helper func to read the tree hash from the commit, apply the changes to index by parsing from tree.
-*/
-func ApplyCommitToIndex(repo *repository.Repository, commitHash string) (*tree.TreeNode, error) {
-	treeHash := ReadCommitTreeHash(repo, commitHash)
-
-	root, err := tree.ParseTree(repo, treeHash, "")
-	if err != nil {
-		return nil, err
-	}
-
-	idx := index.NewIndex()
-	tree.TreeToIndex(idx, root, "")
-	idx.Write(repo)
-
-	return root, nil
 }

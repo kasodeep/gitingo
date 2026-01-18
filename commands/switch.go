@@ -5,7 +5,6 @@ import (
 
 	"github.com/kasodeep/gitingo/helper"
 	"github.com/kasodeep/gitingo/repository"
-	"github.com/kasodeep/gitingo/tree"
 )
 
 /*
@@ -66,14 +65,4 @@ func SwitchHash(repo *repository.Repository, hash string) error {
 	}
 
 	return repo.DeattachHead(hash)
-}
-
-// Don’t refactor just because code looks similar, Refactor when you can name the intent.
-func CheckoutCommit(repo *repository.Repository, hash string) error {
-	root, err := ApplyCommitToIndex(repo, hash)
-	if err != nil {
-		return err
-	}
-
-	return tree.WriteReverse(repo, root, "")
 }

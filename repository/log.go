@@ -6,6 +6,10 @@ import (
 	"path/filepath"
 )
 
+/*
+Writes the reference to the logs file, depending on the current head pointer.
+Stores the transition log when we do the reset command.
+*/
 func (repo *Repository) WriteRefLog(oldHash, newHash, msg string) error {
 	var ref string
 	if repo.IsDetached {

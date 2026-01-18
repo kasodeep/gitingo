@@ -3,7 +3,6 @@ package commands
 import (
 	"bytes"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/kasodeep/gitingo/helper"
@@ -69,26 +68,6 @@ func Commit(base string, msg string) error {
 
 	p.Success("Committed: " + commitHash)
 	return nil
-}
-
-/*
-The method takes a commit hash and repository, try to read the parent hash in the process.
-*/
-func ReadCommitTreeHash(repo *repository.Repository, commitHash string) string {
-	// Strip "commit <size>\0"
-	content, ok := helper.ReadObject(repo.GitDir, commitHash)
-	if !ok {
-		return ""
-	}
-
-	lines := bytes.Split(content, []byte{'\n'})
-	for _, line := range lines {
-		if bytes.HasPrefix(line, []byte("tree ")) {
-			return strings.TrimSpace(string(line[5:]))
-		}
-	}
-
-	return ""
 }
 
 /*

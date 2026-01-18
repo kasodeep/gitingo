@@ -1,3 +1,7 @@
+/*
+The package provides a helper method to write, read, verify objects that are being stored with hash.
+It provides a common interface for all interacting with the object.
+*/
 package helper
 
 import (

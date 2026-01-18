@@ -8,8 +8,13 @@ import (
 	"strings"
 )
 
+// error to represent the branch not found.
 var ErrBranchNotExists = errors.New("branch does not exist")
 
+/*
+It creates the branch with the given name, only when a parent commit exists.
+It writes current commit to the branch.
+*/
 func (r *Repository) CreateBranch(name string) error {
 	hash, err := r.ReadHead()
 	if err != nil || hash == "" {
@@ -114,6 +119,10 @@ func (r *Repository) AttachHead(branch string) error {
 	return nil
 }
 
+/*
+Creates the reference to a hash rather than branch.
+Updates the in-memory branch to be an empty string.
+*/
 func (r *Repository) DeattachHead(hash string) error {
 	headPath := filepath.Join(r.GitDir, "HEAD")
 	if err := os.WriteFile(headPath, []byte(hash), 0644); err != nil {
@@ -129,7 +138,9 @@ func (r *Repository) DeattachHead(hash string) error {
 
 /*
 It reads the head file, and checks for two operations,
-1. when head is detached, it reads the files directly and passes the commit hash.
+
+1. When head is detached, it reads the files directly and passes the commit hash.
+
 2. Otherwise, it reads the branch file.
 */
 func (repo *Repository) ReadHead() (string, error) {
@@ -156,7 +167,6 @@ func (repo *Repository) ReadHead() (string, error) {
 WriteHead attaches the next commit to the current branch or head.
 */
 func (repo *Repository) WriteHead(commitHash []byte) error {
-
 	if !repo.IsDetached {
 		refPath := filepath.Join(repo.GitDir, refsFolder, headsDir, repo.CurrBranch)
 

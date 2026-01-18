@@ -173,6 +173,9 @@ func (idx *Index) addFile(repo *repository.Repository, fullPath string, toWrite 
 	idx.updateEntry(relPath, mode, hash)
 }
 
+/*
+Updates the index entry into the in memory structure by comparing the hash.
+*/
 func (idx *Index) updateEntry(path, mode, hash string) {
 	old, exists := idx.Entries[path]
 	if exists && old.Hash == hash && old.Mode == mode {
