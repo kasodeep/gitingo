@@ -26,15 +26,15 @@ func (p *PrettyPrinter) Info(msg string) {
 }
 
 func (p *PrettyPrinter) Success(msg string) {
-	fmt.Fprintln(p.out, text.FgGreen.Sprint("✓ "), msg)
+	fmt.Fprintln(p.out, text.FgGreen.Sprint(msg))
 }
 
 func (p *PrettyPrinter) Warn(msg string) {
-	fmt.Fprintln(p.out, text.FgYellow.Sprint("! "), msg)
+	fmt.Fprintln(p.out, text.FgYellow.Sprint(msg))
 }
 
 func (p *PrettyPrinter) Error(msg string) {
-	fmt.Fprintln(p.err, text.FgRed.Sprint("✗ "), msg)
+	fmt.Fprintln(p.err, text.FgRed.Sprint(msg))
 }
 
 func (p *PrettyPrinter) Table(headers []string, rows [][]string) {
@@ -57,4 +57,24 @@ func (p *PrettyPrinter) Table(headers []string, rows [][]string) {
 
 	t.SetStyle(table.StyleLight)
 	t.Render()
+}
+
+func (p *PrettyPrinter) CommitHash(hash string) string {
+	return text.FgYellow.Sprint(hash)
+}
+
+func (p *PrettyPrinter) Branch(name string) string {
+	return text.FgCyan.Sprint(name)
+}
+
+func (p *PrettyPrinter) Author(name, email string) string {
+	return text.FgGreen.Sprintf("%s <%s>", name, email)
+}
+
+func (p *PrettyPrinter) Date(date string) string {
+	return text.FgBlue.Sprint(date)
+}
+
+func (p *PrettyPrinter) Message(msg string) string {
+	return text.FgWhite.Sprint(msg)
 }
