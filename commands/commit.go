@@ -77,27 +77,42 @@ Writes the commit message and call the helper.WriteObject to write the commit to
 func WriteCommitObject(gitDir string, treeHash string, parentHash string, message string) string {
 	var buf bytes.Buffer
 
+	// tree
 	buf.WriteString("tree ")
 	buf.WriteString(treeHash)
 	buf.WriteByte('\n')
 
+	// parent (optional)
 	if parentHash != "" {
 		buf.WriteString("parent ")
 		buf.WriteString(parentHash)
 		buf.WriteByte('\n')
 	}
 
+	// metadata
 	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
+	name, email := repository.ReadConfig(gitDir)
 
-	buf.WriteString("author gitingo <gitingo@local> ")
+	buf.WriteString("author ")
+	buf.WriteString(name)
+	buf.WriteString(" <")
+	buf.WriteString(email)
+	buf.WriteString("> ")
 	buf.WriteString(timestamp)
 	buf.WriteString(" +0000\n")
 
-	buf.WriteString("committer gitingo <gitingo@local> ")
+	buf.WriteString("committer ")
+	buf.WriteString(name)
+	buf.WriteString(" <")
+	buf.WriteString(email)
+	buf.WriteString("> ")
 	buf.WriteString(timestamp)
 	buf.WriteString(" +0000\n")
 
+	// blank line before message
 	buf.WriteByte('\n')
+
+	// commit message
 	buf.WriteString(message)
 	buf.WriteByte('\n')
 

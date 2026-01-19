@@ -18,6 +18,7 @@ const (
 	refsFolder = "refs"
 	headsDir   = "heads"
 	initBranch = "main"
+	configFile = "config"
 )
 
 /*
