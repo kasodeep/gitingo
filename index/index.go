@@ -188,3 +188,20 @@ func (idx *Index) updateEntry(path, mode, hash string) {
 		Path: path,
 	}
 }
+
+/*
+Returns the index parsed from the current index file, staged changes.
+*/
+func LoadIndex(repo *repository.Repository) (*Index, error) {
+	idx := NewIndex()
+	return idx, idx.Parse(repo)
+}
+
+/*
+It reads the working directory to build the index from it, without writing the blobs.
+*/
+func LoadWorkingDirIndex(repo *repository.Repository) *Index {
+	idx := NewIndex()
+	idx.AddFromPath(repo, repo.WorkDir, false)
+	return idx
+}

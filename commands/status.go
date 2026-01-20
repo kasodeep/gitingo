@@ -11,17 +11,26 @@ import (
 type ChangeType int
 
 const (
-	Untracked ChangeType = iota
+	UnTracked ChangeType = iota
+	Deleted
 	Modified
 )
 
+/*
+Change represents the difference between two files, from different stages.
+It provides the path and the change type, with hashes.
+*/
 type Change struct {
 	Path string
 	Type ChangeType
-	From string
-	To   string
+
+	FromHash string
+	ToHash   string
 }
 
+/*
+Prints the difference between WD <-> INDEX <-> TREE.
+*/
 func Status(base string) error {
 	repo, err := repository.GetRepository(base)
 	if err != nil {
@@ -32,13 +41,17 @@ func Status(base string) error {
 	return nil
 }
 
+/*
+It loads the different indexes one from base, wd, and tree.
+Then compares them to get the []Change array.
+*/
 func Check(repo *repository.Repository) error {
-	indexIdx, err := LoadIndex(repo)
+	indexIdx, err := index.LoadIndex(repo)
 	if err != nil {
 		return err
 	}
 
-	wdIdx := LoadWorkingDirIndex(repo)
+	wdIdx := index.LoadWorkingDirIndex(repo)
 	wdChanges := DiffIndexes(indexIdx, wdIdx)
 
 	commitIdx, err := LoadCommitIndex(repo)
@@ -47,25 +60,14 @@ func Check(repo *repository.Repository) error {
 	}
 	indexChanges := DiffIndexes(commitIdx, indexIdx)
 
-	PrintChanges("index check", wdChanges)
-	PrintChanges("commit check", indexChanges)
+	PrintStatusChanges(false, wdChanges)
+	PrintStatusChanges(true, indexChanges)
 
 	if len(indexChanges) > 0 || len(wdChanges) > 0 {
 		return fmt.Errorf("some files changed after tracking")
 	}
 
 	return nil
-}
-
-func LoadIndex(repo *repository.Repository) (*index.Index, error) {
-	idx := index.NewIndex()
-	return idx, idx.Parse(repo)
-}
-
-func LoadWorkingDirIndex(repo *repository.Repository) *index.Index {
-	idx := index.NewIndex()
-	idx.AddFromPath(repo, repo.WorkDir, false)
-	return idx
 }
 
 func LoadCommitIndex(repo *repository.Repository) (*index.Index, error) {
@@ -94,39 +96,69 @@ It iterates over the other index.
 When an entry is not present in base idx or hash is different, the file is changed.
 */
 func DiffIndexes(base, other *index.Index) []Change {
-	var changes []Change
+	changes := []Change{}
+	seen := make(map[string]bool)
 
-	for path, entry := range other.Entries {
-		baseEntry, ok := base.Entries[path]
+	// Check additions & modifications
+	for path, bEntry := range other.Entries {
+		seen[path] = true
+		aEntry, ok := base.Entries[path]
+
 		if !ok {
 			changes = append(changes, Change{
-				Path: path,
-				Type: Untracked,
-				To:   entry.Hash,
+				Path:   path,
+				Type:   UnTracked,
+				ToHash: bEntry.Hash,
 			})
 			continue
 		}
 
-		if baseEntry.Hash != entry.Hash {
+		if aEntry.Hash != bEntry.Hash {
 			changes = append(changes, Change{
-				Path: path,
-				Type: Modified,
-				From: baseEntry.Hash,
-				To:   entry.Hash,
+				Path:     path,
+				Type:     Modified,
+				FromHash: aEntry.Hash,
+				ToHash:   bEntry.Hash,
 			})
 		}
+	}
+
+	// Check deletions
+	for path, aEntry := range base.Entries {
+		if seen[path] {
+			continue
+		}
+
+		changes = append(changes, Change{
+			Path:     path,
+			Type:     Deleted,
+			FromHash: aEntry.Hash,
+		})
 	}
 
 	return changes
 }
 
-func PrintChanges(scope string, changes []Change) {
+func PrintStatusChanges(commit bool, changes []Change) {
+	var scope string
+	var tracked string
+
+	if commit {
+		scope = "commit check"
+		tracked = "staged"
+	} else {
+		scope = "index check"
+		tracked = "untracked"
+	}
+
 	for _, c := range changes {
 		switch c.Type {
-		case Untracked:
-			p.Warn(fmt.Sprintf("%s: untracked file %s", scope, c.Path))
+		case UnTracked:
+			p.Warn(fmt.Sprintf("%s: %s %s", scope, tracked, c.Path))
 		case Modified:
-			p.Warn(fmt.Sprintf("%s: modified file %s", scope, c.Path))
+			p.Warn(fmt.Sprintf("%s: modified %s", scope, c.Path))
+		case Deleted:
+			p.Warn(fmt.Sprintf("%s: deleted %s", scope, c.Path))
 		}
 	}
 }
