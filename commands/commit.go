@@ -2,6 +2,7 @@ package commands
 
 import (
 	"bytes"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -20,8 +21,10 @@ func Commit(base string, msg string) error {
 	/*
 		1. Parse index
 	*/
-	idx := index.NewIndex()
-	idx.Parse(repo)
+	idx, err := index.LoadIndex(repo)
+	if err != nil {
+		return err
+	}
 
 	/*
 		2. Create + write tree
@@ -43,6 +46,7 @@ func Commit(base string, msg string) error {
 	if parentCommit != "" {
 		oldTreeHash := ReadCommitTreeHash(repo, parentCommit)
 		if oldTreeHash == newTreeHash {
+			p.Info(fmt.Sprintf("On branch %s", repo.CurrBranch))
 			p.Warn("Nothing to commit...")
 			return nil
 		}
@@ -66,7 +70,7 @@ func Commit(base string, msg string) error {
 		return err
 	}
 
-	p.Success("Committed: " + commitHash)
+	p.Success(fmt.Sprintf("Committed to branch %s %s: ", repo.CurrBranch, commitHash))
 	return nil
 }
 

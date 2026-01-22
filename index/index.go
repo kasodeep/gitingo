@@ -41,7 +41,7 @@ func NewIndex() *Index {
 Parse loads the index file, using the bufio scanner.
 It reads each line and splits based on space, to get the index entry parts.
 */
-func (idx *Index) Parse(repo *repository.Repository) error {
+func (idx *Index) parse(repo *repository.Repository) error {
 	f, err := os.Open(filepath.Join(repo.GitDir, indexFile))
 	if err != nil {
 		return nil // empty index is OK
@@ -134,6 +134,7 @@ func (idx *Index) AddFromPath(repo *repository.Repository, start string, toWrite
 			return nil
 		}
 
+		// Remove the .git in prod. :)
 		if d.IsDir() && (d.Name() == repo.GitFolder || d.Name() == ".git") {
 			return filepath.SkipDir
 		}
@@ -194,7 +195,7 @@ Returns the index parsed from the current index file, staged changes.
 */
 func LoadIndex(repo *repository.Repository) (*Index, error) {
 	idx := NewIndex()
-	return idx, idx.Parse(repo)
+	return idx, idx.parse(repo)
 }
 
 /*

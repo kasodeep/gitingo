@@ -19,6 +19,6 @@ func Init(base string) error {
 		return err
 	}
 
-	p.Info(fmt.Sprintf("git repo initialized with branch %s", repo.CurrBranch))
+	p.Success(fmt.Sprintf("Empty git repo initialized with branch %s", repo.CurrBranch))
 	return nil
 }

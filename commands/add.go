@@ -14,8 +14,8 @@ func Add(base string, paths []string) error {
 		return err
 	}
 
-	idx := index.NewIndex()
-	if err := idx.Parse(repo); err != nil {
+	idx, err := index.LoadIndex(repo)
+	if err != nil {
 		return err
 	}
 

@@ -1,45 +1,25 @@
 # Git (in Go)
 
+## Repository
+
+- Provides an abstract interface to deal with repository from a single source of truth.
+
+## Index
+
+- We represent the index file as a IndexEntry with mode, hash and the path leaving the base.
+- It performs the function of parsing the idx file, and writing or updating it.
+
 ## Commands
 
 - The package contains detail about how each command is executed and the respective methods.
 
 ### Init
 
-1. repoRoot represented the current directory where we create the .git equivalent.
-2. It checks for the repository to be initialized already and prints the error.
-3. Then it created the .git folder with all the necessary folders and files.
+1. Calls the NewRepository function, to get a new `Repository` struct.
+2. Then, initiates the `Create` call, to load the folders, files, refs, and HEAD.
 
 ### Add
-
-- It checks if the repo is initialized or not.
-- Then, it parses the index file, which contains details about the files being tracked.
-- It uses the `bufio.Scanner` and `fmt.SScanf` to parse the required simple pattern.
-- Checking the isAll arg it modifies the index by walking the repoRoot and adding the file.
-
-```go
-package main
-
-import (
-    "bytes"
-    "compress/zlib"
-    "fmt"
-)
-
-func main() {
-    content := []byte("Hello Git!\n")
-    header := fmt.Sprintf("blob %d\x00", len(content))
-    data := append([]byte(header), content...)
-
-    var buf bytes.Buffer
-    zw := zlib.NewWriter(&buf)
-    zw.Write(data)
-    zw.Close()
-
-    compressed := buf.Bytes()
-    fmt.Printf("%x\n", compressed) // This is your packed object
-}
-```
+### Commit
 
 ### Status
 
@@ -58,7 +38,6 @@ Stage 2:
   - we can get the tree hash from it.
   - our ParseTree func can parse the tree, we need a func to convert that to idx.
   - to convert a tree to idx, we need a func in tree.go since dependency and abstraction.
-*/
 
 ### Commit
 

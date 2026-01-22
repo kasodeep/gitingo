@@ -37,8 +37,8 @@ func Status(base string) error {
 		return err
 	}
 
-	Check(repo)
-	return nil
+	p.Info(fmt.Sprintf("On branch %s", repo.CurrBranch))
+	return Check(repo)
 }
 
 /*
@@ -53,19 +53,16 @@ func Check(repo *repository.Repository) error {
 
 	wdIdx := index.LoadWorkingDirIndex(repo)
 	wdChanges := DiffIndexes(indexIdx, wdIdx)
+	PrintStatusChanges(false, wdChanges)
 
+	// TODO: Need some refactor since no commit, means everything in index is staged for commit.
 	commitIdx, err := LoadCommitIndex(repo)
 	if err != nil {
 		return err
 	}
+
 	indexChanges := DiffIndexes(commitIdx, indexIdx)
-
-	PrintStatusChanges(false, wdChanges)
 	PrintStatusChanges(true, indexChanges)
-
-	if len(indexChanges) > 0 || len(wdChanges) > 0 {
-		return fmt.Errorf("some files changed after tracking")
-	}
 
 	return nil
 }
@@ -140,25 +137,25 @@ func DiffIndexes(base, other *index.Index) []Change {
 }
 
 func PrintStatusChanges(commit bool, changes []Change) {
-	var scope string
+
 	var tracked string
 
 	if commit {
-		scope = "commit check"
+		p.Info("Changes to be committed:")
 		tracked = "staged"
 	} else {
-		scope = "index check"
+		p.Info("Changes not staged for commit:")
 		tracked = "untracked"
 	}
 
 	for _, c := range changes {
 		switch c.Type {
 		case UnTracked:
-			p.Warn(fmt.Sprintf("%s: %s %s", scope, tracked, c.Path))
+			p.Warn(fmt.Sprintf("\t %s: %s", tracked, c.Path))
 		case Modified:
-			p.Warn(fmt.Sprintf("%s: modified %s", scope, c.Path))
+			p.Warn(fmt.Sprintf("\t modified %s", c.Path))
 		case Deleted:
-			p.Warn(fmt.Sprintf("%s: deleted %s", scope, c.Path))
+			p.Warn(fmt.Sprintf("\t deleted %s", c.Path))
 		}
 	}
 }
