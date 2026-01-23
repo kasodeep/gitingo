@@ -3,6 +3,7 @@ package commands
 import (
 	"fmt"
 
+	"github.com/kasodeep/gitingo/commit"
 	"github.com/kasodeep/gitingo/helper"
 	"github.com/kasodeep/gitingo/repository"
 )
@@ -49,7 +50,7 @@ func handleMixedReset(repo *repository.Repository, hash string) error {
 		return err
 	}
 
-	if _, err := ApplyCommitToIndex(repo, hash); err != nil {
+	if _, err := commit.ApplyCommitToIndex(repo, hash); err != nil {
 		return err
 	}
 
@@ -64,7 +65,7 @@ func handleHardReset(repo *repository.Repository, hash string) error {
 		return err
 	}
 
-	if err := CheckoutCommit(repo, hash); err != nil {
+	if err := commit.CheckoutCommit(repo, hash); err != nil {
 		return err
 	}
 

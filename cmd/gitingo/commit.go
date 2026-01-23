@@ -23,7 +23,7 @@ var commitCmd = &cobra.Command{
 			return err
 		}
 
-		err = commands.Commit(cwd, commitMessage)
+		err = commands.CommitCommand(cwd, commitMessage)
 		return err
 	},
 }

@@ -15,8 +15,13 @@ func Branch(base string, branch string) error {
 	if branch == "" {
 		return PrintBranches(repo)
 	} else {
-		return repo.CreateBranch(branch)
+		err = repo.CreateBranch(branch)
+		if err == nil {
+			p.Success(fmt.Sprintf("Branch created with name: %s", branch))
+		}
 	}
+
+	return err
 }
 
 func PrintBranches(repo *repository.Repository) error {
