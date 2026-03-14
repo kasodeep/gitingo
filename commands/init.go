@@ -1,24 +1,15 @@
 package commands
 
 import (
-	"fmt"
-
-	"github.com/kasodeep/gitingo/printer"
 	"github.com/kasodeep/gitingo/repository"
 )
 
-var p = printer.NewPrettyPrinter()
-
-// Init initializes a new gitingo repository
-// Equivalent to: git init
+// Init initialises a new gitingo repository at base.
 func Init(base string) error {
 	repo := repository.NewRepository(base)
-
-	err := repo.Create()
-	if err != nil {
+	if err := repo.Create(); err != nil {
 		return err
 	}
-
-	p.Success(fmt.Sprintf("Empty git repo initialized with branch %s", repo.CurrBranch))
+	p.Success("empty repository initialised on branch " + repo.CurrBranch)
 	return nil
 }

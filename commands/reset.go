@@ -8,66 +8,37 @@ import (
 	"github.com/kasodeep/gitingo/repository"
 )
 
-/*
-It takes the commit hash and the mode, to perform the operation accordingly.
-*/
-func Reset(base string, hash string, mode string) error {
+// Reset moves HEAD to hash using the given mode.
+//
+//	soft  — HEAD only
+//	mixed — HEAD + index
+//	hard  — HEAD + index + working directory
+func Reset(base, hash, mode string) error {
 	repo, err := repository.GetRepository(base)
 	if err != nil {
+		return err
+	}
+	if err := helper.VerifyObject(repo.GitDir, hash, "commit"); err != nil {
 		return err
 	}
 
 	switch mode {
 	case "soft":
-		return handleSoftReset(repo, hash)
+		return repo.UpdateHeadWithLog(hash, "reset --soft")
+
 	case "mixed":
-		return handleMixedReset(repo, hash)
+		if _, err := commit.ApplyCommitToIndex(repo, hash); err != nil {
+			return err
+		}
+		return repo.UpdateHeadWithLog(hash, "reset --mixed")
+
 	case "hard":
-		return handleHardReset(repo, hash)
+		if err := commit.CheckoutCommit(repo, hash); err != nil {
+			return err
+		}
+		return repo.UpdateHeadWithLog(hash, "reset --hard")
+
 	default:
-		return fmt.Errorf("Invalid format")
+		return fmt.Errorf("unknown reset mode %q — want soft, mixed, or hard", mode)
 	}
-}
-
-/*
-I am proud of my work ashamed of the commit, hence i need to go back to a good commit.
-That's the whole point of soft reset.
-*/
-func handleSoftReset(repo *repository.Repository, hash string) error {
-	err := helper.VerifyObject(repo.GitDir, hash, "commit")
-	if err != nil {
-		return err
-	}
-	return repo.UpdateHeadWithLog(hash, "reset --soft")
-}
-
-/*
-What is a mixed reset?
-We change the head and also apply the changes of the hash to the index.
-*/
-func handleMixedReset(repo *repository.Repository, hash string) error {
-	if err := helper.VerifyObject(repo.GitDir, hash, "commit"); err != nil {
-		return err
-	}
-
-	if _, err := commit.ApplyCommitToIndex(repo, hash); err != nil {
-		return err
-	}
-
-	return repo.UpdateHeadWithLog(hash, "reset --mixed")
-}
-
-/*
-We want to override the filesystem, the logic should be implemented by the tree as we want to read the blobs.
-*/
-func handleHardReset(repo *repository.Repository, hash string) error {
-	if err := helper.VerifyObject(repo.GitDir, hash, "commit"); err != nil {
-		return err
-	}
-
-	if err := commit.CheckoutCommit(repo, hash); err != nil {
-		return err
-	}
-
-	return repo.UpdateHeadWithLog(hash, "reset --hard")
 }

@@ -1,3 +1,5 @@
+// Package tree converts between the flat Index and the hierarchical tree
+// objects stored in the git object store.
 package tree
 
 import (
@@ -15,18 +17,18 @@ import (
 	"github.com/kasodeep/gitingo/repository"
 )
 
-/*
-TreeNode represents an in-memory hierarchical tree built from the flat index.
-Similar to TrieNode, but consisting of maps for keys.
-*/
+// ─────────────────────────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────────────────────────
+
+// TreeNode is an in-memory directory node.
+// Files holds direct file entries; Dirs holds named subtrees.
+// Mirrors the on-disk tree object format but is easier to work with in Go.
 type TreeNode struct {
 	Files map[string]index.IndexEntry
 	Dirs  map[string]*TreeNode
 }
 
-/*
-Returns a new blank tree.
-*/
 func NewTree() *TreeNode {
 	return &TreeNode{
 		Files: make(map[string]index.IndexEntry),
@@ -34,179 +36,166 @@ func NewTree() *TreeNode {
 	}
 }
 
-/*
-Create converts a flat index into a hierarchical tree.
-One of the best methods, logic :)
-*/
-func Create(index *index.Index) *TreeNode {
+// ─────────────────────────────────────────────────────────────────────────────
+// Index ↔ Tree conversion
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Create converts a flat Index into a hierarchical TreeNode.
+// Each slash-separated path component becomes a level in the tree.
+func Create(idx *index.Index) *TreeNode {
 	root := NewTree()
-
-	for p, entry := range index.Entries {
+	for p, entry := range idx.Entries {
 		parts := strings.Split(filepath.ToSlash(p), "/")
-		curr := root
-
-		for i := 0; i < len(parts)-1; i++ {
-			dir := parts[i]
-			if _, ok := curr.Dirs[dir]; !ok {
-				curr.Dirs[dir] = NewTree()
+		node := root
+		
+		for _, dir := range parts[:len(parts)-1] {
+			if node.Dirs[dir] == nil {
+				node.Dirs[dir] = NewTree()
 			}
-			curr = curr.Dirs[dir]
+			node = node.Dirs[dir]
 		}
-
-		curr.Files[parts[len(parts)-1]] = entry
+		node.Files[parts[len(parts)-1]] = entry
 	}
-
 	return root
 }
 
-/*
-WriteTree writes the entire tree and returns its hash.
-It recursively writes the files and subtree objects first while getting it's content/hash.
-*/
+// TreeToIndex flattens a TreeNode back into a flat Index.
+// prefix carries the accumulated directory path during recursion.
+func TreeToIndex(idx *index.Index, node *TreeNode, prefix string) {
+	for name, entry := range node.Files {
+		idx.Entries[filepath.Join(prefix, name)] = entry
+	}
+	for name, child := range node.Dirs {
+		TreeToIndex(idx, child, filepath.Join(prefix, name))
+	}
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Serialisation
+// ─────────────────────────────────────────────────────────────────────────────
+
+// WriteTree serialises root and all subtrees into the object store.
+// Returns the hash of the root tree object.
 func WriteTree(gitDir string, root *TreeNode) string {
 	var buf bytes.Buffer
 	writeNode(gitDir, root, &buf)
 	return helper.WriteObject(gitDir, "tree", buf.Bytes())
 }
 
-/*
-writeNode serializes a tree node into the given writer.
-Subtrees are written first to obtain their hashes.
-*/
+// writeNode serialises one tree node in git's binary tree format:
+//
+//	"<mode> <name>\0<20-byte-hash>" per entry, dirs before files, both sorted.
 func writeNode(gitDir string, node *TreeNode, w io.Writer) {
-	// --- Directories (sorted) ---
-	dirNames := make([]string, 0, len(node.Dirs))
-	for name := range node.Dirs {
-		dirNames = append(dirNames, name)
-	}
-	sort.Strings(dirNames)
-
-	for _, name := range dirNames {
-		sub := node.Dirs[name]
-
-		subHash := WriteTree(gitDir, sub)
+	for _, name := range sortedKeys(node.Dirs) {
+		subHash := WriteTree(gitDir, node.Dirs[name])
 		hashBytes, _ := hex.DecodeString(subHash)
-
-		io.WriteString(w, "40000 ")
-		io.WriteString(w, name)
+		io.WriteString(w, "40000 "+name)
 		w.Write([]byte{0})
 		w.Write(hashBytes)
 	}
 
-	// --- Files (sorted) ---
-	fileNames := make([]string, 0, len(node.Files))
-	for name := range node.Files {
-		fileNames = append(fileNames, name)
-	}
-	sort.Strings(fileNames)
-
-	for _, name := range fileNames {
+	for _, name := range sortedKeys(node.Files) {
 		entry := node.Files[name]
 		hashBytes, _ := hex.DecodeString(entry.Hash)
-
-		io.WriteString(w, entry.Mode)
-		io.WriteString(w, " ")
-		io.WriteString(w, name)
+		io.WriteString(w, entry.Mode+" "+name)
 		w.Write([]byte{0})
 		w.Write(hashBytes)
 	}
 }
 
-/*
-It iterates over the tree and creates the index.
-Recursively calls the func when encountering a directory.
-*/
-func TreeToIndex(idx *index.Index, node *TreeNode, path string) {
-	for p, e := range node.Files {
-		idx.Entries[filepath.Join(path, p)] = e
-	}
+// ─────────────────────────────────────────────────────────────────────────────
+// Deserialisation
+// ─────────────────────────────────────────────────────────────────────────────
 
-	for d, n := range node.Dirs {
-		TreeToIndex(idx, n, filepath.Join(path, d))
-	}
-}
-
-/*
-The method takes the hash and repo to read the file, and parse the tree.
-1. It reads the parent tree, and cuts the data at byte 0.
-2. The it extracts the mode with space byte.
-3. Then the name with byte{0} with hash of length 32.
-*/
-func ParseTree(repo *repository.Repository, hash string, base string) (*TreeNode, error) {
-	root := NewTree()
-
+// ParseTree reads a tree object by hash and reconstructs its TreeNode.
+// Subtrees are parsed recursively; base accumulates the path prefix.
+func ParseTree(repo *repository.Repository, hash, base string) (*TreeNode, error) {
 	content, ok := helper.ReadObject(repo.GitDir, hash)
 	if !ok {
-		return nil, fmt.Errorf("cannot find object with hash %s", hash)
+		return nil, fmt.Errorf("tree object not found: %s", hash)
 	}
 
-	i := 0
-	for i < len(content) {
-		// 1. mode
+	root := NewTree()
+	for i := 0; i < len(content); {
+		// mode
 		space := bytes.IndexByte(content[i:], ' ')
 		if space == -1 {
-			return nil, fmt.Errorf("invalid tree entry")
+			return nil, fmt.Errorf("invalid tree entry at offset %d", i)
 		}
 		mode := string(content[i : i+space])
 		i += space + 1
 
-		// 2. name
+		// name
 		nul := bytes.IndexByte(content[i:], 0)
 		if nul == -1 {
-			return nil, fmt.Errorf("invalid tree entry")
+			return nil, fmt.Errorf("invalid tree entry at offset %d", i)
 		}
 		name := string(content[i : i+nul])
 		i += nul + 1
 
-		// 3. hash (20 bytes)
+		// 32-byte hash (SHA-256)
 		if i+32 > len(content) {
-			return nil, fmt.Errorf("invalid hash length")
+			return nil, fmt.Errorf("truncated hash at offset %d", i)
 		}
-		hash := hex.EncodeToString(content[i : i+32])
+		entryHash := hex.EncodeToString(content[i : i+32])
 		i += 32
 
-		// 4. attach to tree
 		if mode == "40000" {
-			// Recursively parse the subtree
-			subTree, err := ParseTree(repo, hash, filepath.Join(base, name))
+			sub, err := ParseTree(repo, entryHash, filepath.Join(base, name))
 			if err != nil {
 				return nil, err
 			}
-			root.Dirs[name] = subTree
+			root.Dirs[name] = sub
 		} else {
 			root.Files[name] = index.IndexEntry{
 				Mode: mode,
-				Hash: hash,
+				Hash: entryHash,
 				Path: filepath.Join(base, name),
 			}
 		}
-
 	}
-
 	return root, nil
 }
 
-/*
-The func writes the given tree to the working directory by override of the workspace.
-*/
+// ─────────────────────────────────────────────────────────────────────────────
+// Working directory
+// ─────────────────────────────────────────────────────────────────────────────
+
+// WriteReverse writes a TreeNode back to the working directory,
+// overwriting existing files. Used by checkout and reset.
 func WriteReverse(repo *repository.Repository, node *TreeNode, base string) error {
-	for path, entry := range node.Dirs {
-		WriteReverse(repo, entry, filepath.Join(base, path))
-	}
-
-	for file, entry := range node.Files {
-		content, ok := helper.ReadObject(repo.GitDir, entry.Hash)
-		if !ok {
-			return fmt.Errorf("unable to read the file %s", file)
-		}
-
-		path := filepath.Join(repo.WorkDir, base, file)
-		err := os.WriteFile(path, content, 0644)
-		if err != nil {
-			// TODO: How do we think in terms of fail safe. If some files written other cause error.
+	for name, child := range node.Dirs {
+		if err := WriteReverse(repo, child, filepath.Join(base, name)); err != nil {
 			return err
 		}
 	}
-
+	for name, entry := range node.Files {
+		content, ok := helper.ReadObject(repo.GitDir, entry.Hash)
+		if !ok {
+			return fmt.Errorf("blob not found for %s", name)
+		}
+		path := filepath.Join(repo.WorkDir, base, name)
+		if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(path, content, 0644); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Helpers
+// ─────────────────────────────────────────────────────────────────────────────
+
+// sortedKeys returns the keys of a string-keyed map in sorted order.
+// Used to produce deterministic tree hashes regardless of map iteration order.
+func sortedKeys[V any](m map[string]V) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }

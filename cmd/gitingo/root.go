@@ -9,7 +9,7 @@ import (
 var rootCmd = &cobra.Command{
 	Use:   "gitingo",
 	Short: "A minimal Git implementation in Go",
-	Long:  "gitingo is a multithreaded, command-line reimplementation of Git internals in Go.",
+	Long:  "gitingo is a simple, command-line reimplementation of Git internals in Go.",
 }
 
 func Execute() {

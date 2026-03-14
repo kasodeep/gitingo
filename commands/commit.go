@@ -1,72 +1,48 @@
 package commands
 
 import (
-	"fmt"
-
 	"github.com/kasodeep/gitingo/commit"
 	"github.com/kasodeep/gitingo/index"
 	"github.com/kasodeep/gitingo/repository"
 	"github.com/kasodeep/gitingo/tree"
 )
 
-func CommitCommand(base string, msg string) error {
+// CommitCommand creates a new commit from the current index.
+//
+// Steps:
+//  1. Load the staged index.
+//  2. Write the tree object from the index.
+//  3. Bail early if the tree matches HEAD (nothing changed).
+//  4. Write the commit object and advance HEAD.
+func CommitCommand(base, msg string) error {
 	repo, err := repository.GetRepository(base)
 	if err != nil {
 		return err
 	}
-	p.Info(fmt.Sprintf("On branch %s", repo.CurrBranch))
 
-	/*
-		1. Parse index
-	*/
 	idx, err := index.LoadIndex(repo)
 	if err != nil {
 		return err
 	}
 
-	/*
-		2. Create + write tree
-	*/
-	root := tree.Create(idx)
-	newTreeHash := tree.WriteTree(repo.GitDir, root)
+	newTreeHash := tree.WriteTree(repo.GitDir, tree.Create(idx))
 
-	/*
-		3. Resolve parent commit
-	*/
-	parentCommit, err := repo.ReadHead()
+	parentHash, err := repo.ReadHead()
 	if err != nil {
 		return err
 	}
 
-	/*
-	   4. Compare with parent commit (if exists)
-	*/
-	if parentCommit != "" {
-		oldTreeHash := commit.ReadTreeHash(repo, parentCommit)
-		if oldTreeHash == newTreeHash {
-			p.Warn("Nothing to commit...")
-			return nil
-		}
+	// Nothing to commit if the tree hasn't changed since the last commit.
+	if parentHash != "" && commit.ReadTreeHash(repo, parentHash) == newTreeHash {
+		p.Warn("nothing to commit")
+		return nil
 	}
 
-	/*
-		5. Write commit object
-	*/
-	commitHash := commit.WriteCommitObject(
-		repo.GitDir,
-		newTreeHash,
-		parentCommit,
-		msg,
-	)
-
-	/*
-		6. Write the commit pointer to head.
-	*/
-	err = repo.WriteHead([]byte(commitHash))
-	if err != nil {
+	commitHash := commit.WriteCommitObject(repo.GitDir, newTreeHash, parentHash, msg)
+	if err := repo.WriteHead([]byte(commitHash)); err != nil {
 		return err
 	}
 
-	p.Success(fmt.Sprintf("Committed %s: ", commitHash))
+	p.Success("committed " + commitHash[:7])
 	return nil
 }

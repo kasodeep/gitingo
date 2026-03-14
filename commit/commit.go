@@ -1,3 +1,5 @@
+// Package commit handles reading and writing commit objects,
+// and applying them to the working directory and index.
 package commit
 
 import (
@@ -13,94 +15,144 @@ import (
 	"github.com/kasodeep/gitingo/tree"
 )
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Types
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Commit is the parsed, in-memory form of a commit object.
 type Commit struct {
-	Tree      string
-	Parents   []string
-	Msg       string
+	Hash      string   // set by the caller after writing, not stored in the object body
+	Tree      string   // root tree hash
+	Parents   []string // zero on the first commit, one normally, two on a merge commit
 	Author    string
 	Email     string
 	Timestamp int64
+	Msg       string
 }
 
-func ParseCommit(gitDir string, hash string) (*Commit, error) {
+// ─────────────────────────────────────────────────────────────────────────────
+// Reading
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ParseCommit reads a commit object by hash and returns its parsed fields.
+func ParseCommit(gitDir, hash string) (*Commit, error) {
 	content, ok := helper.ReadObject(gitDir, hash)
 	if !ok {
-		return nil, fmt.Errorf("invalid commit object: %s", hash)
+		return nil, fmt.Errorf("commit not found: %s", hash)
 	}
 
 	lines := bytes.Split(content, []byte{'\n'})
 	c := &Commit{}
-	i := 0
 
-	for ; i < len(lines); i++ {
-		line := lines[i]
+	// Headers end at the first blank line; message follows.
+	blankAt := len(lines)
+	for i, line := range lines {
 		if len(line) == 0 {
+			blankAt = i
 			break
 		}
-
-		switch {
-		case bytes.HasPrefix(line, []byte("tree ")):
-			c.Tree = string(line[5:])
-
-		case bytes.HasPrefix(line, []byte("parent ")):
-			c.Parents = append(c.Parents, string(line[7:]))
-
-		case bytes.HasPrefix(line, []byte("author ")):
-			// author Name <email> timestamp tz
-			rest := string(line[len("author "):])
-
-			gt := strings.LastIndex(rest, ">")
-			if gt == -1 {
-				continue
-			}
-
-			nameEmail := rest[:gt+1]
-			meta := strings.Fields(rest[gt+1:]) // Fields splits into whitespace.
-
-			parts := strings.SplitN(nameEmail, "<", 2)
-			c.Author = strings.TrimSpace(parts[0])
-			c.Email = strings.TrimSuffix(parts[1], ">")
-
-			if len(meta) > 0 {
-				c.Timestamp, _ = strconv.ParseInt(meta[0], 10, 64)
-			}
-		}
+		parseHeader(c, string(line))
 	}
 
-	// commit message
-	if i+1 < len(lines) {
+	if blankAt+1 < len(lines) {
 		c.Msg = strings.TrimRight(
-			string(bytes.Join(lines[i+1:], []byte{'\n'})),
+			string(bytes.Join(lines[blankAt+1:], []byte{'\n'})),
 			"\n",
 		)
 	}
-
 	return c, nil
 }
 
-/*
-The reads the commit from the repository and parses the tree hash present in it.
-*/
+// parseHeader dispatches a single header line into the Commit fields.
+func parseHeader(c *Commit, line string) {
+	switch {
+	case strings.HasPrefix(line, "tree "):
+		c.Tree = line[5:]
+
+	case strings.HasPrefix(line, "parent "):
+		c.Parents = append(c.Parents, line[7:])
+
+	case strings.HasPrefix(line, "author "):
+		// Format: "author Name <email> <unix-ts> <tz>"
+		rest := line[len("author "):]
+		gt := strings.LastIndex(rest, ">")
+		if gt == -1 {
+			return
+		}
+		parts := strings.SplitN(rest[:gt+1], "<", 2)
+		c.Author = strings.TrimSpace(parts[0])
+		c.Email = strings.TrimSuffix(parts[1], ">")
+
+		if meta := strings.Fields(rest[gt+1:]); len(meta) > 0 {
+			c.Timestamp, _ = strconv.ParseInt(meta[0], 10, 64)
+		}
+	}
+}
+
+// ReadTreeHash returns the root tree hash for a commit without
+// fully parsing it. Used in hot paths (status, diff) that only
+// need the tree.
 func ReadTreeHash(repo *repository.Repository, commitHash string) string {
-	// Strip "commit <size>\0"
 	content, ok := helper.ReadObject(repo.GitDir, commitHash)
 	if !ok {
 		return ""
 	}
-
-	lines := bytes.Split(content, []byte{'\n'})
-	for _, line := range lines {
+	for _, line := range bytes.Split(content, []byte{'\n'}) {
 		if bytes.HasPrefix(line, []byte("tree ")) {
 			return strings.TrimSpace(string(line[5:]))
 		}
 	}
-
 	return ""
 }
 
-/*
-The function reads the commit, to parse the tree and modify the index file.
-*/
+// ─────────────────────────────────────────────────────────────────────────────
+// Writing
+// ─────────────────────────────────────────────────────────────────────────────
+
+// WriteCommitObject serialises a commit and writes it to the object store.
+// Returns the new commit's hash.
+func WriteCommitObject(gitDir, treeHash, parentHash, message string) string {
+	cfg := repository.ReadConfig(gitDir)
+	ts := strconv.FormatInt(time.Now().Unix(), 10)
+
+	var buf bytes.Buffer
+	fmt.Fprintf(&buf, "tree %s\n", treeHash)
+	if parentHash != "" {
+		fmt.Fprintf(&buf, "parent %s\n", parentHash)
+	}
+	fmt.Fprintf(&buf, "author %s <%s> %s +0000\n", cfg.Name, cfg.Email, ts)
+	fmt.Fprintf(&buf, "committer %s <%s> %s +0000\n", cfg.Name, cfg.Email, ts)
+	fmt.Fprintf(&buf, "\n%s\n", message)
+
+	return helper.WriteObject(gitDir, "commit", buf.Bytes())
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Applying commits to the working directory
+// ─────────────────────────────────────────────────────────────────────────────
+
+// CheckoutCommit updates the index and working directory to match commitHash.
+// Used by switch and reset.
+func CheckoutCommit(repo *repository.Repository, hash string) error {
+	treeHash := ReadTreeHash(repo, hash)
+	if treeHash == "" {
+		return fmt.Errorf("cannot resolve tree for commit %s", hash[:7])
+	}
+
+	root, err := tree.ParseTree(repo, treeHash, "")
+	if err != nil {
+		return err
+	}
+
+	idx := index.NewIndex()
+	tree.TreeToIndex(idx, root, "")
+	if err := idx.Write(repo); err != nil {
+		return err
+	}
+
+	return tree.WriteReverse(repo, root, "")
+}
+
 func ApplyCommitToIndex(repo *repository.Repository, commitHash string) (*tree.TreeNode, error) {
 	treeHash := ReadTreeHash(repo, commitHash)
 
@@ -114,63 +166,4 @@ func ApplyCommitToIndex(repo *repository.Repository, commitHash string) (*tree.T
 	idx.Write(repo)
 
 	return root, nil
-}
-
-/*
-It modifies the index, head, working directory to the given commit hash.
-*/
-// Don’t refactor just because code looks similar, Refactor when you can name the intent.
-func CheckoutCommit(repo *repository.Repository, hash string) error {
-	root, err := ApplyCommitToIndex(repo, hash)
-	if err != nil {
-		return err
-	}
-
-	return tree.WriteReverse(repo, root, "")
-}
-
-/*
-It formats the commit obj with the parent hash and the tree hash.
-Writes the commit message and call the helper.WriteObject to write the commit to disk.
-*/
-func WriteCommitObject(gitDir string, treeHash string, parentHash string, message string) string {
-	var buf bytes.Buffer
-
-	buf.WriteString("tree ")
-	buf.WriteString(treeHash)
-	buf.WriteByte('\n')
-
-	if parentHash != "" {
-		buf.WriteString("parent ")
-		buf.WriteString(parentHash)
-		buf.WriteByte('\n')
-	}
-
-	timestamp := strconv.FormatInt(time.Now().Unix(), 10)
-	name, email := repository.ReadConfig(gitDir)
-
-	buf.WriteString("author ")
-	buf.WriteString(name)
-	buf.WriteString(" <")
-	buf.WriteString(email)
-	buf.WriteString("> ")
-	buf.WriteString(timestamp)
-	buf.WriteString(" +0000\n")
-
-	buf.WriteString("committer ")
-	buf.WriteString(name)
-	buf.WriteString(" <")
-	buf.WriteString(email)
-	buf.WriteString("> ")
-	buf.WriteString(timestamp)
-	buf.WriteString(" +0000\n")
-
-	// blank line before message
-	buf.WriteByte('\n')
-
-	// commit message
-	buf.WriteString(message)
-	buf.WriteByte('\n')
-
-	return helper.WriteObject(gitDir, "commit", buf.Bytes())
 }

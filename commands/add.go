@@ -5,9 +5,7 @@ import (
 	"github.com/kasodeep/gitingo/repository"
 )
 
-/*
-git add / git add . / git add <path>
-*/
+// Add stages the given paths. A single "." stages the entire working directory.
 func Add(base string, paths []string) error {
 	repo, err := repository.GetRepository(base)
 	if err != nil {

@@ -6,73 +6,58 @@ import (
 	"strings"
 )
 
-/*
-The add config overrides the name and email in the configFile of the repository.
-*/
+// ─────────────────────────────────────────────────────────────────────────────
+// Config
+// ─────────────────────────────────────────────────────────────────────────────
+
+// WriteConfig updates name and/or email in .gitingo/config.
+// Blank arguments leave the existing value unchanged.
 func WriteConfig(gitDir, name, email string) error {
-	configPath := filepath.Join(gitDir, configFile)
+	curr := ReadConfig(gitDir) // load whatever exists first
 
-	// existing values (if any)
-	var currName, currEmail string
-
-	// read existing config if present
-	if data, err := os.ReadFile(configPath); err == nil {
-		lines := strings.Split(string(data), "\n")
-		for _, line := range lines {
-			line = strings.TrimSpace(line)
-
-			if after, ok := strings.CutPrefix(line, "name ="); ok {
-				currName = strings.TrimSpace(after)
-			}
-
-			if after, ok := strings.CutPrefix(line, "email ="); ok {
-				currEmail = strings.TrimSpace(after)
-			}
-		}
-	}
-
-	// override only provided values
 	if name != "" {
-		currName = name
+		curr.Name = name
 	}
 	if email != "" {
-		currEmail = email
+		curr.Email = email
 	}
 
-	// build new config
-	var buf strings.Builder
-	buf.WriteString("[user]\n")
-
-	if currName != "" {
-		buf.WriteString("\tname = " + currName + "\n")
+	var b strings.Builder
+	b.WriteString("[user]\n")
+	if curr.Name != "" {
+		b.WriteString("\tname = " + curr.Name + "\n")
 	}
-	if currEmail != "" {
-		buf.WriteString("\temail = " + currEmail + "\n")
+	if curr.Email != "" {
+		b.WriteString("\temail = " + curr.Email + "\n")
 	}
 
-	return os.WriteFile(configPath, []byte(buf.String()), 0644)
+	return os.WriteFile(filepath.Join(gitDir, configFile), []byte(b.String()), 0644)
 }
 
-/*
-Read config returns the name and the email present in the config file.
-*/
-func ReadConfig(gitDir string) (name, email string) {
-	configPath := filepath.Join(gitDir, configFile)
+// Config holds the user identity stored in .gitingo/config.
+type Config struct {
+	Name  string
+	Email string
+}
 
-	if data, err := os.ReadFile(configPath); err == nil {
-		lines := strings.Split(string(data), "\n")
-		for _, line := range lines {
-			line = strings.TrimSpace(line)
+// ReadConfig parses .gitingo/config and returns the current user identity.
+// Missing or unreadable config returns a zero Config (both fields empty).
+func ReadConfig(gitDir string) Config {
+	var cfg Config
 
-			if after, ok := strings.CutPrefix(line, "name ="); ok {
-				name = strings.TrimSpace(after)
-			}
-
-			if after, ok := strings.CutPrefix(line, "email ="); ok {
-				email = strings.TrimSpace(after)
-			}
-		}
+	data, err := os.ReadFile(filepath.Join(gitDir, configFile))
+	if err != nil {
+		return cfg
 	}
 
-	return
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if v, ok := strings.CutPrefix(line, "name ="); ok {
+			cfg.Name = strings.TrimSpace(v)
+		}
+		if v, ok := strings.CutPrefix(line, "email ="); ok {
+			cfg.Email = strings.TrimSpace(v)
+		}
+	}
+	return cfg
 }

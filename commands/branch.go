@@ -1,42 +1,39 @@
 package commands
 
 import (
-	"fmt"
-
 	"github.com/kasodeep/gitingo/repository"
 )
 
-func Branch(base string, branch string) error {
+// Branch lists all branches, or creates one if a name is given.
+func Branch(base, branch string) error {
 	repo, err := repository.GetRepository(base)
 	if err != nil {
 		return err
 	}
 
 	if branch == "" {
-		return PrintBranches(repo)
-	} else {
-		err = repo.CreateBranch(branch)
-		if err == nil {
-			p.Success(fmt.Sprintf("Branch created with name: %s", branch))
-		}
+		return printBranches(repo)
 	}
 
-	return err
+	if err := repo.CreateBranch(branch); err != nil {
+		return err
+	}
+	p.Success("Branch created: " + branch)
+	return nil
 }
 
-func PrintBranches(repo *repository.Repository) error {
+// printBranches lists all local branches, marking the current one with *.
+func printBranches(repo *repository.Repository) error {
 	branches, err := repo.ListBranches()
 	if err != nil {
 		return err
 	}
-
-	for _, temp := range branches {
-		if repo.CurrBranch == temp {
-			p.Info(fmt.Sprintf("*%s", temp))
+	for _, b := range branches {
+		if b == repo.CurrBranch {
+			p.Info("*" + b)
 		} else {
-			p.Info(temp)
+			p.Info(b)
 		}
 	}
-
 	return nil
 }
